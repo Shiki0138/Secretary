@@ -1,12 +1,8 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { Suspense, useState, useMemo } from "react";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter, useSearchParams } from "next/navigation";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -17,8 +13,22 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
 
+  // Create Supabase client dynamically to avoid SSG errors
+  const supabase = useMemo<SupabaseClient | null>(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) return null;
+    return createClient(url, key);
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!supabase) {
+      setError("Supabase is not configured. Please set environment variables.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
