@@ -102,9 +102,9 @@ export async function middleware(request: NextRequest) {
 
     // Check if accessing dashboard or employee pages
     if (pathname.startsWith("/dashboard") || pathname.startsWith("/employee")) {
-        // Allow demo mode in development
+        // Allow demo mode with ?demo=true query parameter
         const isDemo = request.nextUrl.searchParams.get("demo") === "true";
-        if (isDevelopment && isDemo) {
+        if (isDemo) {
             return response;
         }
 
