@@ -5,6 +5,13 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
+// Demo data for unauthenticated demo mode
+const DEMO_ORG = {
+    org: { id: "demo", name: "デモ医院", slug: "demo-clinic" },
+    stats: { openCount: 3, weeklyCount: 12 },
+    isDemo: true,
+};
+
 async function getOrgInfo(userId: string) {
     const supabase = getSupabaseAdmin();
 
@@ -50,6 +57,7 @@ async function getOrgInfo(userId: string) {
             openCount: openCount || 0,
             weeklyCount: weeklyCount || 0,
         },
+        isDemo: false,
     };
 }
 
@@ -61,7 +69,20 @@ function LoadingFallback() {
     );
 }
 
-export default async function DashboardPage() {
+interface PageProps {
+    searchParams: Promise<{ demo?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: PageProps) {
+    const params = await searchParams;
+    const isDemo = params.demo === "true";
+
+    // Demo mode - skip auth
+    if (isDemo) {
+        const { org, stats } = DEMO_ORG;
+        return <DashboardUI org={org} stats={stats} isDemo={true} />;
+    }
+
     // Get authenticated user
     const authUser = await getAuthenticatedUser();
 
@@ -77,6 +98,14 @@ export default async function DashboardPage() {
 
     const { org, stats } = orgInfo;
 
+    return <DashboardUI org={org} stats={stats} isDemo={false} />;
+}
+
+function DashboardUI({ org, stats, isDemo }: {
+    org: { name: string };
+    stats: { openCount: number; weeklyCount: number };
+    isDemo: boolean;
+}) {
     return (
         <div className="min-h-dvh bg-gray-50">
             {/* Header */}
@@ -86,6 +115,7 @@ export default async function DashboardPage() {
                         <div>
                             <h1 className="text-lg sm:text-xl font-bold text-gray-900">
                                 AI秘書 ダッシュボード
+                                {isDemo && <span className="ml-2 text-sm font-normal text-orange-600">(デモモード)</span>}
                             </h1>
                             <p className="text-sm text-gray-500">{org.name}</p>
                         </div>
@@ -138,7 +168,11 @@ export default async function DashboardPage() {
                         style={{ minHeight: "400px", maxHeight: "70vh" }}
                     >
                         <Suspense fallback={<LoadingFallback />}>
-                            <ConversationList />
+                            {isDemo ? (
+                                <DemoConversations />
+                            ) : (
+                                <ConversationList />
+                            )}
                         </Suspense>
                     </div>
 
@@ -150,11 +184,73 @@ export default async function DashboardPage() {
                             </span>
                         </h2>
                         <Suspense fallback={<LoadingFallback />}>
-                            <AnnouncementComposer />
+                            {isDemo ? (
+                                <DemoAnnouncements />
+                            ) : (
+                                <AnnouncementComposer />
+                            )}
                         </Suspense>
                     </div>
                 </div>
             </main>
+        </div>
+    );
+}
+
+function DemoConversations() {
+    const demoConversations = [
+        { id: 1, subject: "シフト変更の相談", status: "open", time: "10分前", name: "田中太郎" },
+        { id: 2, subject: "有給休暇について", status: "pending", time: "2時間前", name: "佐藤花子" },
+        { id: 3, subject: "給与明細の確認", status: "resolved", time: "昨日", name: "鈴木一郎" },
+    ];
+
+    return (
+        <div className="p-4">
+            <h3 className="font-semibold text-gray-900 mb-4">相談一覧</h3>
+            <div className="space-y-3">
+                {demoConversations.map((conv) => (
+                    <div key={conv.id} className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="font-medium text-gray-900">{conv.subject}</p>
+                                <p className="text-sm text-gray-500">{conv.name}</p>
+                            </div>
+                            <div className="text-right">
+                                <span className={`text-xs px-2 py-1 rounded-full ${conv.status === "open" ? "bg-red-100 text-red-700" :
+                                        conv.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                                            "bg-green-100 text-green-700"
+                                    }`}>
+                                    {conv.status === "open" ? "対応待ち" :
+                                        conv.status === "pending" ? "確認中" : "完了"}
+                                </span>
+                                <p className="text-xs text-gray-400 mt-1">{conv.time}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function DemoAnnouncements() {
+    return (
+        <div className="space-y-4">
+            <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">デモモードでは通知を送信できません</p>
+                <textarea
+                    className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                    placeholder="全社通知を入力..."
+                    rows={3}
+                    disabled
+                />
+                <button
+                    className="mt-2 w-full bg-gray-300 text-gray-500 py-2 rounded-lg text-sm cursor-not-allowed"
+                    disabled
+                >
+                    送信（デモ）
+                </button>
+            </div>
         </div>
     );
 }
