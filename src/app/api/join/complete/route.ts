@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
                 org_id: invitation.org_id,
                 line_user_id: lineUserId,
                 display_name: name,
-                role: "employee",
+                role: "staff",
             })
             .select()
             .single();

@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
                 org_id: invitation.org_id,
                 line_user_id: lineUserId,
                 display_name: userName || lineDisplayName,
-                role: "employee",
+                role: "staff",
             });
 
         if (userError) {
