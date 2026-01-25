@@ -24,17 +24,27 @@ function verifySignature(body: string, signature: string, channelSecret: string)
     }
 }
 
-async function translateMessage(text: string, direction: "to_owner" | "to_employee"): Promise<string> {
+async function translateMessage(text: string, direction: "to_owner" | "to_employee", employeeName?: string): Promise<string> {
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) return text;
 
     const systemPrompt = direction === "to_owner"
         ? `あなたは従業員と経営者の間のコミュニケーションを仲介するAI秘書です。
-従業員からのメッセージを、経営者に伝えやすい形に翻訳してください。
-ルール: 感情的な表現は中立的に、要件を明確に、丁寧で簡潔に。`
-        : `あなたは経営者と従業員の間のコミュニケーションを仲介するAI秘書です。
-経営者からのメッセージを、従業員に伝えやすい形に翻訳してください。
-ルール: 威圧的にならないよう、親しみやすく、でも業務的に。`;
+従業員からのメッセージを、経営者に伝えやすい形に整理してください。
+
+ルール:
+- 感情的な表現があれば中立的に言い換える
+- 要件を明確にする
+- 原文の意図は必ず保持する
+- 過度に文章を膨らませない`
+        : `あなたは経営者から従業員への返信を整える秘書です。
+経営者のメッセージを、${employeeName || '従業員'}さん個人に送る自然な返信に整えてください。
+
+重要なルール:
+- これは個人への1対1の返信です。「皆さん」「みなさま」などグループ向け表現は絶対に使わない
+- 元のメッセージの意図を維持し、過度に丁寧にしたり膨らませたりしない
+- 簡潔で自然な文章にする
+- 威圧的にならない程度にビジネスライクに`;
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -321,7 +331,7 @@ async function handleOwnerMessage(user: { id: string; org_id: string; display_na
                 await cancelPendingReply(ownerState.pending_reply_id);
                 const employee = await getEmployeeById(pendingReply.employee_id);
                 if (employee) {
-                    const translated = await translateMessage(text, "to_employee");
+                    const translated = await translateMessage(text, "to_employee", employee.display_name);
                     const newPending = await createPendingReply(user.org_id, employee.id, user.id, text, translated);
                     if (newPending && user.line_user_id) {
                         await setOwnerState(user.id, user.org_id, "confirming", employee.id, newPending.id);
@@ -348,7 +358,7 @@ async function handleOwnerMessage(user: { id: string; org_id: string; display_na
         }
 
         // Translate and create pending reply
-        const translated = await translateMessage(replyContent, "to_employee");
+        const translated = await translateMessage(replyContent, "to_employee", employee.display_name);
         const pendingReply = await createPendingReply(user.org_id, employee.id, user.id, replyContent, translated);
 
         if (pendingReply && user.line_user_id) {
