@@ -5,58 +5,33 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
-// Demo data for unauthenticated demo mode
+// Demo data
 const DEMO_ORG = {
     org: { id: "demo", name: "デモ歯科医院", slug: "demo-clinic" },
     stats: { openCount: 2, weeklyCount: 8 },
-    isDemo: true,
 };
 
 async function getOrgInfo(userId: string) {
     const supabase = getSupabaseAdmin();
-
     const { data: user, error: userError } = await supabase
-        .from("users")
-        .select("org_id, display_name, role")
-        .eq("id", userId)
-        .single();
-
+        .from("users").select("org_id, display_name, role").eq("id", userId).single();
     if (userError || !user) return null;
 
     const { data: org, error: orgError } = await supabase
-        .from("organizations")
-        .select("id, name, slug")
-        .eq("id", user.org_id)
-        .single();
-
+        .from("organizations").select("id, name, slug").eq("id", user.org_id).single();
     if (orgError || !org) return null;
 
-    const { count: openCount } = await supabase
-        .from("conversations")
-        .select("*", { count: "exact", head: true })
-        .eq("org_id", org.id)
-        .eq("status", "open");
-
-    const { count: weeklyCount } = await supabase
-        .from("conversations")
-        .select("*", { count: "exact", head: true })
-        .eq("org_id", org.id)
+    const { count: openCount } = await supabase.from("conversations")
+        .select("*", { count: "exact", head: true }).eq("org_id", org.id).eq("status", "open");
+    const { count: weeklyCount } = await supabase.from("conversations")
+        .select("*", { count: "exact", head: true }).eq("org_id", org.id)
         .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
-    return {
-        org,
-        user,
-        stats: { openCount: openCount || 0, weeklyCount: weeklyCount || 0 },
-        isDemo: false,
-    };
+    return { org, stats: { openCount: openCount || 0, weeklyCount: weeklyCount || 0 } };
 }
 
 function LoadingFallback() {
-    return (
-        <div className="flex items-center justify-center h-64">
-            <div className="animate-pulse text-gray-500">読み込み中...</div>
-        </div>
-    );
+    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-gray-500">読み込み中...</div></div>;
 }
 
 interface PageProps {
@@ -68,13 +43,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     const isDemo = params.demo === "true";
 
     if (isDemo) {
-        const { org, stats } = DEMO_ORG;
-        return <DashboardUI org={org} stats={stats} isDemo={true} />;
+        return <DashboardUI org={DEMO_ORG.org} stats={DEMO_ORG.stats} isDemo={true} />;
     }
 
     const authUser = await getAuthenticatedUser();
     if (!authUser) redirect("/login");
-
     const orgInfo = await getOrgInfo(authUser.id);
     if (!orgInfo) redirect("/login");
 
@@ -98,13 +71,11 @@ function DashboardUI({ org, stats, isDemo }: {
                             </h1>
                             <p className="text-sm text-gray-500">{org.name}</p>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-4">
-                            {stats.openCount > 0 && (
-                                <span className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full font-medium">
-                                    {stats.openCount}件の対応待ち
-                                </span>
-                            )}
-                        </div>
+                        {stats.openCount > 0 && (
+                            <span className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full font-medium">
+                                {stats.openCount}件の対応待ち
+                            </span>
+                        )}
                     </div>
                 </div>
             </header>
@@ -123,7 +94,6 @@ function DashboardUI({ org, stats, isDemo }: {
                             {isDemo ? <DemoConversations /> : <ConversationList />}
                         </Suspense>
                     </div>
-
                     <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
                         <h2 className="font-semibold text-gray-900 mb-4">📢 全社通知</h2>
                         <Suspense fallback={<LoadingFallback />}>
@@ -140,9 +110,7 @@ function StatCard({ label, value, isAlert }: { label: string; value: string | nu
     return (
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <div className="text-xs sm:text-sm text-gray-500 mb-1">{label}</div>
-            <div className={`text-xl sm:text-2xl font-bold ${isAlert ? "text-red-600" : "text-gray-900"}`}>
-                {value}
-            </div>
+            <div className={`text-xl sm:text-2xl font-bold ${isAlert ? "text-red-600" : "text-gray-900"}`}>{value}</div>
         </div>
     );
 }
@@ -153,13 +121,13 @@ function DemoConversations() {
             id: 1,
             employee: "田中 太郎",
             status: "open",
-            time: "10分前",
             messages: [
                 {
                     from: "employee",
-                    original: "来週の月曜日、子供の学校行事があるのでシフト変更をお願いしたいんですけど...",
-                    translated: "来週月曜日にシフト変更を希望します（理由：子供の学校行事のため）",
-                    time: "10分前"
+                    // 経営者には翻訳後のみ表示
+                    translated: "来週月曜日のシフト変更を希望します。理由：子供の学校行事のため。ご検討よろしくお願いいたします。",
+                    time: "10分前",
+                    isRead: true,  // 従業員が経営者の既読を確認できる
                 },
             ]
         },
@@ -167,13 +135,12 @@ function DemoConversations() {
             id: 2,
             employee: "佐藤 花子",
             status: "open",
-            time: "1時間前",
             messages: [
                 {
                     from: "employee",
-                    original: "有給休暇って何日残ってますか？確認方法がわからなくて...",
-                    translated: "有給休暇の残日数の確認方法についてお問い合わせ",
-                    time: "1時間前"
+                    translated: "有給休暇の残日数と確認方法についてお伺いしたいです。",
+                    time: "1時間前",
+                    isRead: true,
                 },
             ]
         },
@@ -181,19 +148,20 @@ function DemoConversations() {
             id: 3,
             employee: "鈴木 一郎",
             status: "resolved",
-            time: "昨日",
             messages: [
                 {
                     from: "employee",
-                    original: "給与明細のダウンロード方法を教えてください",
-                    translated: "給与明細のダウンロード方法についてのお問い合わせ",
-                    time: "昨日 14:30"
+                    translated: "給与明細のダウンロード方法を教えていただけますでしょうか。",
+                    time: "昨日 14:30",
+                    isRead: true,
                 },
                 {
                     from: "owner",
-                    original: "従業員ポータルの「給与明細」タブからダウンロードできます。",
-                    translated: "従業員ポータルから給与明細をダウンロードする手順をご案内しました。",
-                    time: "昨日 15:00"
+                    // 経営者は自分の原文と翻訳後を両方確認できる
+                    original: "ポータルの給与明細タブからダウンロードできます。",
+                    translated: "従業員ポータルの「給与明細」タブからダウンロードいただけます。ご不明点がございましたらお気軽にお問い合わせください。",
+                    time: "昨日 15:00",
+                    isRead: true,  // 従業員が既読した
                 },
             ]
         },
@@ -203,7 +171,9 @@ function DemoConversations() {
         <div className="divide-y divide-gray-100">
             <div className="p-4 border-b border-gray-200 bg-gray-50">
                 <h3 className="font-semibold text-gray-900">💬 従業員からの相談</h3>
-                <p className="text-xs text-gray-500 mt-1">LINEで受信したメッセージがAI翻訳されて表示されます</p>
+                <p className="text-xs text-gray-500 mt-1">
+                    ※ 従業員のメッセージはAI翻訳後の内容が表示されます
+                </p>
             </div>
 
             {conversations.map((conv) => (
@@ -216,7 +186,6 @@ function DemoConversations() {
                             </div>
                             <div>
                                 <p className="font-medium text-gray-900">{conv.employee}</p>
-                                <p className="text-xs text-gray-500">{conv.time}</p>
                             </div>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded-full ${conv.status === "open" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
@@ -228,40 +197,61 @@ function DemoConversations() {
                     {/* Messages */}
                     <div className="space-y-3 ml-12">
                         {conv.messages.map((msg, i) => (
-                            <div key={i} className={`p-3 rounded-lg ${msg.from === "employee" ? "bg-blue-50 border-l-4 border-blue-400" : "bg-green-50 border-l-4 border-green-400"
+                            <div key={i} className={`p-3 rounded-lg ${msg.from === "employee"
+                                    ? "bg-gray-100 border-l-4 border-gray-400"
+                                    : "bg-blue-50 border-l-4 border-blue-400"
                                 }`}>
-                                <div className="flex justify-between items-start mb-1">
+                                <div className="flex justify-between items-start mb-2">
                                     <span className="text-xs font-medium text-gray-600">
-                                        {msg.from === "employee" ? "📱 従業員 (LINE)" : "👤 経営者 (ダッシュボード)"}
+                                        {msg.from === "employee" ? "📱 従業員" : "👤 あなた"}
                                     </span>
-                                    <span className="text-xs text-gray-400">{msg.time}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">{msg.time}</span>
+                                        {msg.isRead && (
+                                            <span className="text-xs text-blue-500 font-medium">✓ 既読</span>
+                                        )}
+                                    </div>
                                 </div>
 
-                                {/* Original message */}
-                                <p className="text-sm text-gray-700 mb-2">
-                                    <span className="text-xs text-gray-400 block mb-1">原文:</span>
-                                    {msg.original}
-                                </p>
+                                {/* 経営者自身のメッセージの場合：原文 + 翻訳後を表示 */}
+                                {msg.from === "owner" && msg.original && (
+                                    <div className="mb-2 p-2 bg-white/50 rounded border border-gray-200">
+                                        <span className="text-xs text-gray-400">あなたが入力した内容:</span>
+                                        <p className="text-sm text-gray-600 mt-1">{msg.original}</p>
+                                    </div>
+                                )}
 
-                                {/* AI Translation */}
-                                <div className="bg-white/50 p-2 rounded border border-gray-200">
-                                    <span className="text-xs text-purple-600 font-medium">✨ AI翻訳:</span>
+                                {/* 翻訳後のメッセージ（双方が確認する共通メッセージ） */}
+                                <div className={msg.from === "owner" && msg.original ? "p-2 bg-blue-100/50 rounded" : ""}>
+                                    {msg.from === "owner" && msg.original && (
+                                        <span className="text-xs text-blue-600">✨ 従業員に送信された内容:</span>
+                                    )}
                                     <p className="text-sm text-gray-800 mt-1">{msg.translated}</p>
                                 </div>
+
+                                {/* 共有確認表示 */}
+                                {msg.isRead && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200/50">
+                                        <span className="text-xs text-gray-400">
+                                            📋 {msg.from === "employee" ? "この内容を確認しました" : "従業員がこの内容を確認しました"}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
 
-                    {/* Reply Box (for open conversations) */}
+                    {/* Reply Box */}
                     {conv.status === "open" && (
                         <div className="mt-3 ml-12 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <p className="text-xs text-gray-500 mb-2">💡 返信はAI翻訳されて従業員のLINEに送信されます</p>
+                            <p className="text-xs text-gray-500 mb-2">
+                                💡 入力内容はAI翻訳されて従業員に送信されます
+                            </p>
                             <div className="flex gap-2">
                                 <input
                                     type="text"
                                     placeholder="返信を入力..."
                                     className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
-                                    defaultValue=""
                                 />
                                 <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                                     送信
@@ -279,40 +269,36 @@ function DemoAnnouncements() {
     return (
         <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-700">
-                    📱 全社通知はAI翻訳されて全従業員のLINEに一斉送信されます
-                </p>
+                <p className="text-sm text-blue-700">📱 全社通知は全従業員のLINEに一斉送信されます</p>
             </div>
 
             <textarea
-                className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="お知らせを入力...&#10;&#10;例: 来週月曜日は臨時休診となります。"
-                rows={4}
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:ring-2 focus:ring-blue-500"
+                placeholder="お知らせを入力..."
+                rows={3}
             />
 
-            <div className="flex gap-2">
-                <button className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-                    📤 全員に送信
-                </button>
-            </div>
+            <button className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+                📤 全員に送信
+            </button>
 
             <hr className="my-4" />
 
             <h4 className="text-sm font-medium text-gray-700">送信履歴</h4>
             <div className="space-y-2">
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex justify-between items-start">
-                        <p className="text-sm text-gray-700">年末年始の休診日のお知らせ</p>
-                        <span className="text-xs text-gray-400">1/20</span>
+                    <p className="text-sm text-gray-700">年末年始の休診日のお知らせ</p>
+                    <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-400">1/20 送信</span>
+                        <span className="text-xs text-green-600 font-medium">✓ 6/6 既読</span>
                     </div>
-                    <p className="text-xs text-green-600 mt-1">✓ 6人中6人が既読</p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex justify-between items-start">
-                        <p className="text-sm text-gray-700">健康診断の日程について</p>
-                        <span className="text-xs text-gray-400">1/15</span>
+                    <p className="text-sm text-gray-700">健康診断の日程について</p>
+                    <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-400">1/15 送信</span>
+                        <span className="text-xs text-yellow-600 font-medium">⏳ 5/6 既読</span>
                     </div>
-                    <p className="text-xs text-green-600 mt-1">✓ 6人中5人が既読</p>
                 </div>
             </div>
         </div>
