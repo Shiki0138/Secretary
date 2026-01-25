@@ -58,10 +58,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create user
+        // Create user with generated UUID (LINE-only users don't have Supabase Auth)
+        const userId = crypto.randomUUID();
         const { data: newUser, error: userError } = await supabase
             .from("users")
             .insert({
+                id: userId,
                 org_id: invitation.org_id,
                 line_user_id: lineUserId,
                 display_name: name,
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest) {
         if (userError) {
             console.error("User creation error:", userError);
             return NextResponse.json(
-                { error: "ユーザー登録に失敗しました" },
+                { error: `ユーザー登録に失敗しました: ${userError.message}` },
                 { status: 500 }
             );
         }
