@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { KnowledgeQA } from "@/components/knowledge/knowledge-qa";
 
 /**
  * 従業員ポータル
@@ -167,6 +168,16 @@ export default async function EmployeePortalPage() {
                         </a>
                     </div>
                 </nav>
+
+                {/* Knowledge Q&A */}
+                <section
+                    id="question"
+                    className="bg-white rounded-xl border border-gray-200 p-4"
+                    aria-labelledby="question-heading"
+                >
+                    <h2 id="question-heading" className="sr-only">規則について質問</h2>
+                    <KnowledgeQA isDemo={false} />
+                </section>
 
                 {/* Shift Calendar Placeholder */}
                 <section

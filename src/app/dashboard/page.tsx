@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { ConversationList } from "@/components/dashboard/conversation-list";
 import { AnnouncementComposer } from "@/components/dashboard/announcement-composer";
+import { DocumentManager } from "@/components/dashboard/document-manager";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -94,11 +95,16 @@ function DashboardUI({ org, stats, isDemo }: {
                             {isDemo ? <DemoConversations /> : <ConversationList />}
                         </Suspense>
                     </div>
-                    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                        <h2 className="font-semibold text-gray-900 mb-4">📢 全社通知</h2>
-                        <Suspense fallback={<LoadingFallback />}>
-                            {isDemo ? <DemoAnnouncements /> : <AnnouncementComposer />}
-                        </Suspense>
+                    <div className="space-y-4 sm:space-y-6">
+                        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+                            <h2 className="font-semibold text-gray-900 mb-4">📢 全社通知</h2>
+                            <Suspense fallback={<LoadingFallback />}>
+                                {isDemo ? <DemoAnnouncements /> : <AnnouncementComposer />}
+                            </Suspense>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+                            <DocumentManager isDemo={isDemo} />
+                        </div>
                     </div>
                 </div>
             </main>
