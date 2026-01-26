@@ -54,7 +54,7 @@ export interface Database {
                 Row: {
                     id: string
                     org_id: string
-                    role: 'owner' | 'manager' | 'staff'
+                    role: 'owner' | 'manager' | 'staff' | 'system_admin'
                     email: string | null
                     display_name: string
                     line_user_id: string | null
@@ -67,7 +67,7 @@ export interface Database {
                 Insert: {
                     id?: string
                     org_id: string
-                    role: 'owner' | 'manager' | 'staff'
+                    role: 'owner' | 'manager' | 'staff' | 'system_admin'
                     email?: string | null
                     display_name: string
                     line_user_id?: string | null
@@ -80,7 +80,7 @@ export interface Database {
                 Update: {
                     id?: string
                     org_id?: string
-                    role?: 'owner' | 'manager' | 'staff'
+                    role?: 'owner' | 'manager' | 'staff' | 'system_admin'
                     email?: string | null
                     display_name?: string
                     line_user_id?: string | null

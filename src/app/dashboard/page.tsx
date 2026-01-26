@@ -124,10 +124,10 @@ function DemoConversations() {
             messages: [
                 {
                     from: "employee",
-                    // 経営者には翻訳後のみ表示
+                    // 経営者には翻訳後のみ表示（原文はプライバシー保護のため非表示）
                     translated: "来週月曜日のシフト変更を希望します。理由：子供の学校行事のため。ご検討よろしくお願いいたします。",
                     time: "10分前",
-                    isRead: true,  // 従業員が経営者の既読を確認できる
+                    isRead: true,
                 },
             ]
         },
@@ -157,11 +157,10 @@ function DemoConversations() {
                 },
                 {
                     from: "owner",
-                    // 経営者は自分の原文と翻訳後を両方確認できる
-                    original: "ポータルの給与明細タブからダウンロードできます。",
+                    // 経営者も自分の原文は見れない（翻訳後のみ）
                     translated: "従業員ポータルの「給与明細」タブからダウンロードいただけます。ご不明点がございましたらお気軽にお問い合わせください。",
                     time: "昨日 15:00",
-                    isRead: true,  // 従業員が既読した
+                    isRead: true,
                 },
             ]
         },
@@ -198,8 +197,8 @@ function DemoConversations() {
                     <div className="space-y-3 ml-12">
                         {conv.messages.map((msg, i) => (
                             <div key={i} className={`p-3 rounded-lg ${msg.from === "employee"
-                                    ? "bg-gray-100 border-l-4 border-gray-400"
-                                    : "bg-blue-50 border-l-4 border-blue-400"
+                                ? "bg-gray-100 border-l-4 border-gray-400"
+                                : "bg-blue-50 border-l-4 border-blue-400"
                                 }`}>
                                 <div className="flex justify-between items-start mb-2">
                                     <span className="text-xs font-medium text-gray-600">
@@ -213,21 +212,8 @@ function DemoConversations() {
                                     </div>
                                 </div>
 
-                                {/* 経営者自身のメッセージの場合：原文 + 翻訳後を表示 */}
-                                {msg.from === "owner" && msg.original && (
-                                    <div className="mb-2 p-2 bg-white/50 rounded border border-gray-200">
-                                        <span className="text-xs text-gray-400">あなたが入力した内容:</span>
-                                        <p className="text-sm text-gray-600 mt-1">{msg.original}</p>
-                                    </div>
-                                )}
-
-                                {/* 翻訳後のメッセージ（双方が確認する共通メッセージ） */}
-                                <div className={msg.from === "owner" && msg.original ? "p-2 bg-blue-100/50 rounded" : ""}>
-                                    {msg.from === "owner" && msg.original && (
-                                        <span className="text-xs text-blue-600">✨ 従業員に送信された内容:</span>
-                                    )}
-                                    <p className="text-sm text-gray-800 mt-1">{msg.translated}</p>
-                                </div>
+                                {/* 翻訳後のメッセージのみ表示（原文はプライバシー保護のため非表示） */}
+                                <p className="text-sm text-gray-800">{msg.translated}</p>
 
                                 {/* 共有確認表示 */}
                                 {msg.isRead && (

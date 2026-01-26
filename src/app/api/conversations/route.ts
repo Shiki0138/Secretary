@@ -38,6 +38,9 @@ export async function GET(request: NextRequest) {
         if (conversationId) {
             const messages = await getMessages(conversationId);
 
+            // 原文はシステム管理者のみアクセス可能（プライバシー保護）
+            const canViewOriginal = user.role === 'system_admin';
+            
             return NextResponse.json({
                 success: true,
                 data: {
@@ -46,7 +49,8 @@ export async function GET(request: NextRequest) {
                         id: m.id,
                         senderId: m.sender_id,
                         direction: m.direction,
-                        originalText: m.original_text,
+                        // 原文は非表示（システム管理者のみ閲覧可能）
+                        originalText: canViewOriginal ? m.original_text : null,
                         translatedText: m.translated_text,
                         isConfirmed: m.is_confirmed,
                         isRead: m.is_read,
