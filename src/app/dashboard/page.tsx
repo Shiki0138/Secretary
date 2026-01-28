@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 
 // Demo data
 const DEMO_ORG = {
-    org: { id: "demo", name: "デモ歯科医院", slug: "demo-clinic" },
+    org: { id: "demo", name: "デモ組織", slug: "demo-org" },
     stats: { openCount: 2, weeklyCount: 8 },
 };
 
