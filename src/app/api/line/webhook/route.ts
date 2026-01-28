@@ -201,14 +201,12 @@ export async function POST(request: NextRequest) {
             if (!userId) continue;
 
             if (event.type === "message" && event.message?.type === "text") {
-                const text = event.message.text;
+                const text = event.message.text.trim();
                 const user = await getUserByLineId(userId);
 
                 if (!user) {
-                    // Unregistered user
-                    if (replyToken) {
-                        await replyToLine(replyToken, "まだ登録が完了していません。経営者から招待リンクを受け取り、登録を完了してください。", channelAccessToken);
-                    }
+                    // Unregistered user - handle invitation code input
+                    await handleUnregisteredUser(userId, text, replyToken, channelAccessToken);
                     continue;
                 }
 
@@ -220,7 +218,11 @@ export async function POST(request: NextRequest) {
                     await handleEmployeeMessage(user, text, replyToken, channelAccessToken);
                 }
             } else if (event.type === "follow") {
-                await replyToLine(replyToken, "AI翻訳秘書へようこそ！\n\n経営者から招待リンクを受け取り、登録を完了してください。", channelAccessToken);
+                await replyToLine(replyToken, `AI翻訳秘書へようこそ！👋
+
+経営者から受け取った8桁の招待コードを入力してください。
+
+例: ABC12XYZ`, channelAccessToken);
             }
         }
 
@@ -228,6 +230,213 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("LINE webhook error:", error);
         return NextResponse.json({ success: true });
+    }
+}
+
+// Handle unregistered user - invitation code flow
+async function handleUnregisteredUser(lineUserId: string, text: string, replyToken: string, accessToken: string) {
+    // Check if user is already pending approval
+    const pendingRegs = await supabaseFetch(
+        `/pending_registrations?line_user_id=eq.${lineUserId}&status=eq.pending&select=id,org_id`
+    );
+    if (pendingRegs?.length > 0) {
+        if (replyToken) {
+            await replyToLine(replyToken, `現在、経営者の承認待ちです。
+しばらくお待ちください。`, accessToken);
+        }
+        return;
+    }
+
+    // Check rate limit
+    const isBlocked = await checkRateLimit(lineUserId, "code_attempt");
+    if (isBlocked) {
+        if (replyToken) {
+            await replyToLine(replyToken, `試行回数が多すぎます。
+24時間後に再度お試しください。`, accessToken);
+        }
+        return;
+    }
+
+    // Validate code format (8 alphanumeric characters)
+    const codePattern = /^[A-Z0-9]{8}$/i;
+    if (!codePattern.test(text)) {
+        if (replyToken) {
+            await replyToLine(replyToken, `8桁の招待コードを入力してください。
+
+例: ABC12XYZ`, accessToken);
+        }
+        return;
+    }
+
+    const code = text.toUpperCase();
+
+    // Look up invitation code
+    const codes = await supabaseFetch(
+        `/invitation_codes?code=eq.${code}&select=id,org_id,expires_at,used_count,max_uses,is_single_use`
+    );
+
+    // Log attempt
+    await logRegistrationAttempt(lineUserId, code, codes?.[0]?.org_id || null, !!codes?.length);
+
+    if (!codes || codes.length === 0) {
+        await incrementRateLimit(lineUserId, "code_attempt");
+        if (replyToken) {
+            await replyToLine(replyToken, `無効な招待コードです。
+経営者に正しいコードを確認してください。`, accessToken);
+        }
+        return;
+    }
+
+    const invitation = codes[0];
+
+    // Check expiry
+    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
+        await incrementRateLimit(lineUserId, "code_attempt");
+        if (replyToken) {
+            await replyToLine(replyToken, `この招待コードは期限切れです。
+経営者に新しいコードを発行してもらってください。`, accessToken);
+        }
+        return;
+    }
+
+    // Check if single-use and already used
+    if (invitation.is_single_use && invitation.used_count >= invitation.max_uses) {
+        await incrementRateLimit(lineUserId, "code_attempt");
+        if (replyToken) {
+            await replyToLine(replyToken, `この招待コードは使用済みです。
+経営者に新しいコードを発行してもらってください。`, accessToken);
+        }
+        return;
+    }
+
+    // Get LINE profile for display name
+    let displayName = "従業員";
+    try {
+        const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (profileRes.ok) {
+            const profile = await profileRes.json();
+            displayName = profile.displayName || "従業員";
+        }
+    } catch (e) {
+        console.error("Failed to get LINE profile:", e);
+    }
+
+    // Create pending registration
+    await supabaseFetch("/pending_registrations", {
+        method: "POST",
+        body: JSON.stringify({
+            line_user_id: lineUserId,
+            line_display_name: displayName,
+            org_id: invitation.org_id,
+            invitation_code_id: invitation.id,
+            status: "pending",
+        }),
+    });
+
+    // Update invitation used count
+    await supabaseFetch(`/invitation_codes?id=eq.${invitation.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+            used_count: invitation.used_count + 1,
+        }),
+    });
+
+    // Notify owner about pending registration
+    const owner = await getOwnerByOrgId(invitation.org_id);
+    if (owner?.line_user_id) {
+        await sendLinePushMessage({
+            accessToken,
+            userId: owner.line_user_id,
+            messages: [{
+                type: "text",
+                text: `🔔 新しい従業員登録リクエスト
+
+名前: ${displayName}
+
+ダッシュボードで承認または拒否してください。`
+            }]
+        });
+    }
+
+    // Reply to user
+    if (replyToken) {
+        await replyToLine(replyToken, `招待コードを確認しました！✅
+
+経営者の承認をお待ちください。
+承認されると、メッセージの送受信が可能になります。`, accessToken);
+    }
+}
+
+// Rate limiting helpers
+async function checkRateLimit(identifier: string, actionType: string): Promise<boolean> {
+    try {
+        const limits = await supabaseFetch(
+            `/rate_limits?identifier=eq.${identifier}&action_type=eq.${actionType}&select=blocked_until,attempt_count`
+        );
+        if (limits?.length > 0) {
+            const limit = limits[0];
+            if (limit.blocked_until && new Date(limit.blocked_until) > new Date()) {
+                return true;
+            }
+        }
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+async function incrementRateLimit(identifier: string, actionType: string): Promise<void> {
+    try {
+        const limits = await supabaseFetch(
+            `/rate_limits?identifier=eq.${identifier}&action_type=eq.${actionType}&select=id,attempt_count`
+        );
+
+        const maxAttempts = 5;
+        const blockDurationHours = 24;
+
+        if (limits?.length > 0) {
+            const newCount = limits[0].attempt_count + 1;
+            const blockedUntil = newCount >= maxAttempts
+                ? new Date(Date.now() + blockDurationHours * 60 * 60 * 1000).toISOString()
+                : null;
+
+            await supabaseFetch(`/rate_limits?id=eq.${limits[0].id}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                    attempt_count: newCount,
+                    blocked_until: blockedUntil,
+                }),
+            });
+        } else {
+            await supabaseFetch("/rate_limits", {
+                method: "POST",
+                body: JSON.stringify({
+                    identifier,
+                    action_type: actionType,
+                    attempt_count: 1,
+                }),
+            });
+        }
+    } catch (e) {
+        console.error("Rate limit error:", e);
+    }
+}
+
+async function logRegistrationAttempt(lineUserId: string, code: string, orgId: string | null, success: boolean): Promise<void> {
+    try {
+        await supabaseFetch("/registration_attempts", {
+            method: "POST",
+            body: JSON.stringify({
+                line_user_id: lineUserId,
+                attempted_code: code,
+                org_id: orgId,
+                success,
+            }),
+        });
+    } catch (e) {
+        console.error("Audit log error:", e);
     }
 }
 

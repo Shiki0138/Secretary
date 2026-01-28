@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { ConversationList } from "@/components/dashboard/conversation-list";
 import { AnnouncementComposer } from "@/components/dashboard/announcement-composer";
 import { DocumentManager } from "@/components/dashboard/document-manager";
+import { InvitationManager } from "@/components/dashboard/invitation-manager";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -56,7 +57,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 }
 
 function DashboardUI({ org, stats, isDemo }: {
-    org: { name: string };
+    org: { id: string; name: string };
     stats: { openCount: number; weeklyCount: number };
     isDemo: boolean;
 }) {
@@ -101,6 +102,10 @@ function DashboardUI({ org, stats, isDemo }: {
                             <Suspense fallback={<LoadingFallback />}>
                                 {isDemo ? <DemoAnnouncements /> : <AnnouncementComposer />}
                             </Suspense>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+                            <h2 className="font-semibold text-gray-900 mb-4">👥 従業員招待</h2>
+                            <InvitationManager orgId={org.id} isDemo={isDemo} />
                         </div>
                         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
                             <DocumentManager isDemo={isDemo} />
