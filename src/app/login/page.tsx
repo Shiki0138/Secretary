@@ -9,6 +9,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
@@ -24,31 +25,43 @@ function LoginForm() {
 
     setLoading(true);
     setError(null);
+    setDebugInfo("ログイン処理中...");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      // Translate common error messages
-      if (error.message.includes("Invalid login credentials")) {
-        setError("メールアドレスまたはパスワードが正しくありません");
-      } else if (error.message.includes("Email not confirmed")) {
-        setError("メールアドレスが確認されていません。確認メールをご確認ください");
+      if (error) {
+        console.error("Login error:", error);
+        setDebugInfo(`エラー: ${error.message}`);
+        // Translate common error messages
+        if (error.message.includes("Invalid login credentials")) {
+          setError("メールアドレスまたはパスワードが正しくありません");
+        } else if (error.message.includes("Email not confirmed")) {
+          setError("メールアドレスが確認されていません。確認メールをご確認ください");
+        } else {
+          setError(error.message);
+        }
+        setLoading(false);
       } else {
-        setError(error.message);
+        console.log("Login success:", data);
+        setDebugInfo(`ログイン成功！リダイレクト先: ${redirect}`);
+        // Use window.location for more reliable redirect
+        window.location.href = redirect;
       }
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      setError("予期しないエラーが発生しました");
+      setDebugInfo(`例外: ${err}`);
       setLoading(false);
-    } else {
-      router.push(redirect);
     }
   };
 
-  const handleDemoLogin = async () => {
-    // For development - bypass login with demo mode
+  const handleDemoLogin = () => {
     const redirectUrl = redirect.includes("?") ? `${redirect}&demo=true` : `${redirect}?demo=true`;
-    router.push(redirectUrl);
+    window.location.href = redirectUrl;
   };
 
   return (
@@ -66,6 +79,12 @@ function LoginForm() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg text-sm">
             {error}
+          </div>
+        )}
+
+        {debugInfo && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-600 p-4 rounded-lg text-sm">
+            {debugInfo}
           </div>
         )}
 
