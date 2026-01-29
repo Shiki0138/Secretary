@@ -19,48 +19,65 @@ export default function OnboardingPage() {
     const [loading, setLoading] = useState(false);
     const [checking, setChecking] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [status, setStatus] = useState<string | null>(null);
+    const [debugLog, setDebugLog] = useState<string[]>([]);
     const [user, setUser] = useState<User | null>(null);
+
+    const addLog = useCallback((msg: string) => {
+        console.log("[Onboarding]", msg);
+        setDebugLog(prev => [...prev, msg]);
+    }, []);
 
     // Check authentication on mount
     useEffect(() => {
         async function checkAuth() {
-            setStatus("認証確認中...");
+            addLog("認証確認開始...");
 
             const supabase = getSupabaseClient();
             if (!supabase) {
-                setError("Supabaseが設定されていません");
+                addLog("ERROR: Supabaseクライアントが取得できません");
                 setChecking(false);
                 return;
             }
+            addLog("Supabaseクライアント取得成功");
 
-            // Use getUser() instead of getSession() - this makes a request to Supabase
-            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-
-            if (authError) {
-                setStatus(`認証エラー: ${authError.message}`);
-                // Not authenticated - redirect to login
-                setTimeout(() => {
-                    window.location.href = "/login?redirect=/onboarding";
-                }, 2000);
-                return;
+            // Try getSession first
+            try {
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) {
+                    addLog(`getSession エラー: ${sessionError.message}`);
+                } else if (sessionData.session) {
+                    addLog(`getSession 成功: ${sessionData.session.user.email}`);
+                } else {
+                    addLog("getSession: セッションなし");
+                }
+            } catch (e) {
+                addLog(`getSession 例外: ${e}`);
             }
 
-            if (!authUser) {
-                setStatus("ログインセッションがありません。");
-                setTimeout(() => {
-                    window.location.href = "/login?redirect=/onboarding";
-                }, 2000);
-                return;
+            // Try getUser
+            try {
+                const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+                if (authError) {
+                    addLog(`getUser エラー: ${authError.message}`);
+                    setChecking(false);
+                    return;
+                }
+                if (!authUser) {
+                    addLog("getUser: ユーザーなし");
+                    setChecking(false);
+                    return;
+                }
+                addLog(`getUser 成功: ${authUser.email}`);
+                setUser(authUser);
+                setChecking(false);
+            } catch (e) {
+                addLog(`getUser 例外: ${e}`);
+                setChecking(false);
             }
-
-            setStatus(`認証OK: ${authUser.email}`);
-            setUser(authUser);
-            setChecking(false);
         }
 
         checkAuth();
-    }, []);
+    }, [addLog]);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,7 +85,7 @@ export default function OnboardingPage() {
 
         setLoading(true);
         setError(null);
-        setStatus("組織を作成中...");
+        addLog("組織作成開始...");
 
         try {
             const response = await fetch("/api/organizations", {
@@ -89,25 +106,30 @@ export default function OnboardingPage() {
                 throw new Error(data.error || "組織の作成に失敗しました");
             }
 
-            setStatus("組織作成成功！ダッシュボードへ移動...");
-
-            // Wait and redirect
+            addLog("組織作成成功！ダッシュボードへ...");
             setTimeout(() => {
                 window.location.href = "/dashboard";
             }, 1500);
         } catch (err) {
             setError(err instanceof Error ? err.message : "エラーが発生しました");
-            setStatus(null);
+            addLog(`組織作成エラー: ${err}`);
             setLoading(false);
         }
-    }, [user, orgName, ownerName]);
+    }, [user, orgName, ownerName, addLog]);
+
+    const handleRetryAuth = useCallback(async () => {
+        addLog("認証再試行...");
+        window.location.reload();
+    }, [addLog]);
 
     if (checking) {
         return (
-            <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-                <div className="text-center">
-                    <div className="animate-pulse text-gray-500 mb-2">認証確認中...</div>
-                    {status && <p className="text-sm text-blue-600">{status}</p>}
+            <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+                <div className="bg-white rounded-xl shadow-lg p-6 max-w-md w-full">
+                    <div className="animate-pulse text-gray-500 mb-4 text-center">認証確認中...</div>
+                    <div className="bg-gray-100 rounded p-3 text-xs font-mono max-h-40 overflow-auto">
+                        {debugLog.map((log, i) => <div key={i} className="text-gray-600">{log}</div>)}
+                    </div>
                 </div>
             </div>
         );
@@ -115,13 +137,28 @@ export default function OnboardingPage() {
 
     if (!user) {
         return (
-            <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-                <div className="text-center">
-                    <div className="text-gray-500 mb-2">認証が必要です</div>
-                    {status && <p className="text-sm text-blue-600 mb-4">{status}</p>}
-                    <a href="/login?redirect=/onboarding" className="text-blue-600 hover:underline">
-                        ログインページへ →
-                    </a>
+            <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+                <div className="bg-white rounded-xl shadow-lg p-6 max-w-md w-full">
+                    <div className="text-gray-700 mb-4 text-center font-medium">認証が必要です</div>
+
+                    <div className="bg-gray-100 rounded p-3 text-xs font-mono max-h-60 overflow-auto mb-4">
+                        {debugLog.map((log, i) => <div key={i} className="text-gray-600">{log}</div>)}
+                    </div>
+
+                    <div className="space-y-2">
+                        <button
+                            onClick={handleRetryAuth}
+                            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                            再試行
+                        </button>
+                        <a
+                            href="/login?redirect=/onboarding"
+                            className="block w-full py-2 text-center border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                            ログインページへ
+                        </a>
+                    </div>
                 </div>
             </div>
         );
@@ -138,14 +175,11 @@ export default function OnboardingPage() {
                     </div>
 
                     <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
-                        メール確認完了！
+                        認証成功！
                     </h1>
-                    <p className="text-center text-gray-600 mb-2">
-                        組織情報を入力して登録を完了しましょう
+                    <p className="text-center text-gray-600 mb-4">
+                        {user.email}
                     </p>
-                    {status && (
-                        <p className="text-center text-sm text-blue-600 mb-4">{status}</p>
-                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
@@ -190,6 +224,12 @@ export default function OnboardingPage() {
                             {loading ? "作成中..." : "組織を作成してダッシュボードへ"}
                         </button>
                     </form>
+
+                    {debugLog.length > 0 && (
+                        <div className="mt-4 bg-gray-100 rounded p-3 text-xs font-mono max-h-32 overflow-auto">
+                            {debugLog.map((log, i) => <div key={i} className="text-gray-600">{log}</div>)}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
