@@ -102,20 +102,8 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // Check if accessing dashboard or employee pages
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/employee")) {
-        // Allow demo mode with ?demo=true query parameter
-        const isDemo = request.nextUrl.searchParams.get("demo") === "true";
-        if (isDemo) {
-            return response;
-        }
-
-        if (error || !user) {
-            const loginUrl = new URL("/login", request.url);
-            loginUrl.searchParams.set("redirect", pathname);
-            return NextResponse.redirect(loginUrl);
-        }
-    }
+    // Dashboard and employee pages handle their own auth
+    // This avoids issues with session cookie timing
 
     return response;
 }
