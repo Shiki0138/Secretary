@@ -68,12 +68,7 @@ function LoginForm() {
         return;
       }
 
-      setStatus(`セッション確認OK。3秒後にリダイレクト...`);
-
-      // Wait longer to ensure cookies are set
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Use replace to avoid back-button issues
+      // Redirect immediately
       window.location.replace(redirect);
     } catch (err) {
       console.error("Unexpected error:", err);
