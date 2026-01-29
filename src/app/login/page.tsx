@@ -47,7 +47,15 @@ function LoginForm() {
         setLoading(false);
       } else {
         console.log("Login success:", data);
-        setDebugInfo(`ログイン成功！リダイレクト先: ${redirect}`);
+        setDebugInfo(`ログイン成功！セッション確立中...`);
+
+        // Wait for session to be established in cookies
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Refresh session to ensure cookies are set
+        await supabase.auth.refreshSession();
+
+        setDebugInfo(`リダイレクト中: ${redirect}`);
         // Use window.location for more reliable redirect
         window.location.href = redirect;
       }
