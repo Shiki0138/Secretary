@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { User } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 function generateOrgSlug(name: string): string {
@@ -20,38 +19,54 @@ export default function OnboardingPage() {
     const [loading, setLoading] = useState(false);
     const [checking, setChecking] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [status, setStatus] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
-    const router = useRouter();
 
     // Check authentication on mount
     useEffect(() => {
         async function checkAuth() {
+            setStatus("認証確認中...");
+
             const supabase = getSupabaseClient();
             if (!supabase) {
-                router.push("/login");
+                setError("Supabaseが設定されていません");
+                setChecking(false);
                 return;
             }
 
-            const { data: { session } } = await supabase.auth.getSession();
+            // Try to get session
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+            if (sessionError) {
+                setStatus(`セッションエラー: ${sessionError.message}`);
+                setChecking(false);
+                return;
+            }
 
             if (!session?.user) {
-                router.push("/login");
+                setStatus("セッションなし。ログインが必要です。");
+                // Wait a bit and redirect
+                setTimeout(() => {
+                    window.location.href = "/login?redirect=/onboarding";
+                }, 2000);
                 return;
             }
 
+            setStatus(`認証OK: ${session.user.email}`);
             setUser(session.user);
             setChecking(false);
         }
 
         checkAuth();
-    }, [router]);
+    }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
 
         setLoading(true);
         setError(null);
+        setStatus("組織を作成中...");
 
         try {
             const response = await fetch("/api/organizations", {
@@ -72,19 +87,40 @@ export default function OnboardingPage() {
                 throw new Error(data.error || "組織の作成に失敗しました");
             }
 
-            // Success - go to dashboard
-            router.push("/dashboard");
+            setStatus("組織作成成功！ダッシュボードへ移動...");
+
+            // Wait and redirect
+            setTimeout(() => {
+                window.location.href = "/dashboard";
+            }, 1500);
         } catch (err) {
             setError(err instanceof Error ? err.message : "エラーが発生しました");
-        } finally {
+            setStatus(null);
             setLoading(false);
         }
-    };
+    }, [user, orgName, ownerName]);
 
     if (checking) {
         return (
             <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-                <div className="animate-pulse text-gray-500">読み込み中...</div>
+                <div className="text-center">
+                    <div className="animate-pulse text-gray-500 mb-2">認証確認中...</div>
+                    {status && <p className="text-sm text-blue-600">{status}</p>}
+                </div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+                <div className="text-center">
+                    <div className="text-gray-500 mb-2">認証が必要です</div>
+                    {status && <p className="text-sm text-blue-600 mb-4">{status}</p>}
+                    <a href="/login?redirect=/onboarding" className="text-blue-600 hover:underline">
+                        ログインページへ →
+                    </a>
+                </div>
             </div>
         );
     }
@@ -102,9 +138,12 @@ export default function OnboardingPage() {
                     <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
                         メール確認完了！
                     </h1>
-                    <p className="text-center text-gray-600 mb-6">
+                    <p className="text-center text-gray-600 mb-2">
                         組織情報を入力して登録を完了しましょう
                     </p>
+                    {status && (
+                        <p className="text-center text-sm text-blue-600 mb-4">{status}</p>
+                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
