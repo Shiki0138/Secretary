@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 function LoginForm() {
@@ -9,25 +9,9 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
-  const router = useRouter();
+  const [success, setSuccess] = useState(false);
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
-
-  // Check if already logged in
-  useEffect(() => {
-    const checkSession = async () => {
-      const supabase = getSupabaseClient();
-      if (!supabase) return;
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setDebugInfo("既にログイン済み。リダイレクト中...");
-        window.location.href = redirect;
-      }
-    };
-    checkSession();
-  }, [redirect]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,18 +24,15 @@ function LoginForm() {
 
     setLoading(true);
     setError(null);
-    setDebugInfo("ログイン処理中...");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         console.error("Login error:", error);
-        setDebugInfo(`エラー: ${error.message}`);
-        // Translate common error messages
         if (error.message.includes("Invalid login credentials")) {
           setError("メールアドレスまたはパスワードが正しくありません");
         } else if (error.message.includes("Email not confirmed")) {
@@ -61,30 +42,15 @@ function LoginForm() {
         }
         setLoading(false);
       } else {
-        console.log("Login success:", data);
-        setDebugInfo(`ログイン成功！セッション確立中...`);
-
-        // Wait for session cookies to be properly set
-        // Supabase SSR needs time to sync cookies
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Double-check session is established
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setDebugInfo(`セッション確認OK。リダイレクト: ${redirect}`);
-          // Full page reload to ensure server sees the new cookies
-          window.location.replace(redirect);
-        } else {
-          setDebugInfo(`セッションが確立されませんでした。再試行中...`);
-          // Try one more time after a longer delay
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          window.location.replace(redirect);
-        }
+        setSuccess(true);
+        // Wait for cookie to be set then redirect
+        setTimeout(() => {
+          window.location.href = redirect;
+        }, 1500);
       }
     } catch (err) {
       console.error("Unexpected error:", err);
       setError("予期しないエラーが発生しました");
-      setDebugInfo(`例外: ${err}`);
       setLoading(false);
     }
   };
@@ -93,6 +59,21 @@ function LoginForm() {
     const redirectUrl = redirect.includes("?") ? `${redirect}&demo=true` : `${redirect}?demo=true`;
     window.location.href = redirectUrl;
   };
+
+  if (success) {
+    return (
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg text-center">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+          <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900">ログイン成功！</h2>
+        <p className="text-gray-600">ダッシュボードに移動しています...</p>
+        <div className="animate-pulse text-blue-600">読み込み中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
@@ -109,12 +90,6 @@ function LoginForm() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg text-sm">
             {error}
-          </div>
-        )}
-
-        {debugInfo && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-600 p-4 rounded-lg text-sm">
-            {debugInfo}
           </div>
         )}
 
