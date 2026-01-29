@@ -9,6 +9,7 @@ export default function SignupPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [emailSent, setEmailSent] = useState(false);
+    const [isExistingUser, setIsExistingUser] = useState(false);
 
     const supabase = useMemo<SupabaseClient | null>(() => {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,13 +27,14 @@ export default function SignupPage() {
 
         setLoading(true);
         setError(null);
+        setIsExistingUser(false);
 
         // Get the current origin for redirect URL
         const redirectUrl = typeof window !== "undefined"
             ? `${window.location.origin}/auth/callback`
             : undefined;
 
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
@@ -43,17 +45,28 @@ export default function SignupPage() {
         if (error) {
             // Translate common error messages
             if (error.message.includes("already registered")) {
-                setError("このメールアドレスは既に登録されています");
+                setError("このメールアドレスは既に登録されています。ログインしてください。");
+                setIsExistingUser(true);
             } else if (error.message.includes("password")) {
                 setError("パスワードは8文字以上で入力してください");
             } else {
                 setError(error.message);
             }
             setLoading(false);
-        } else {
-            setEmailSent(true);
-            setLoading(false);
+            return;
         }
+
+        // Check if user already exists (Supabase returns user but no session for existing users)
+        // When a user already exists, identities array is empty
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+            setError("このメールアドレスは既に登録されています。ログインしてください。");
+            setIsExistingUser(true);
+            setLoading(false);
+            return;
+        }
+
+        setEmailSent(true);
+        setLoading(false);
     };
 
     // Show email sent confirmation
@@ -76,14 +89,27 @@ export default function SignupPage() {
                         メール内のリンクをクリックして登録を完了してください。
                     </p>
 
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left mb-4">
                         <p className="text-sm text-amber-800">
                             <strong>メールが届かない場合：</strong>
                         </p>
                         <ul className="text-sm text-amber-700 mt-2 list-disc list-inside space-y-1">
                             <li>迷惑メールフォルダを確認してください</li>
                             <li>数分待ってから再度お試しください</li>
+                            <li>既に登録済みの場合はメールが届きません</li>
                         </ul>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                        <p className="text-sm text-blue-800">
+                            <strong>既にアカウントをお持ちですか？</strong>
+                        </p>
+                        <a
+                            href="/login"
+                            className="mt-2 inline-block text-sm text-blue-600 font-medium hover:underline"
+                        >
+                            → ログインページへ
+                        </a>
                     </div>
 
                     <button
@@ -92,7 +118,7 @@ export default function SignupPage() {
                             setEmail("");
                             setPassword("");
                         }}
-                        className="mt-6 text-sm text-blue-600 hover:underline"
+                        className="mt-6 text-sm text-gray-500 hover:underline"
                     >
                         別のメールアドレスで登録する
                     </button>
@@ -114,8 +140,16 @@ export default function SignupPage() {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
-                            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
-                                {error}
+                            <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg text-sm">
+                                <p>{error}</p>
+                                {isExistingUser && (
+                                    <a
+                                        href="/login"
+                                        className="mt-2 inline-block text-red-700 font-medium hover:underline"
+                                    >
+                                        → ログインページへ
+                                    </a>
+                                )}
                             </div>
                         )}
 
@@ -159,7 +193,7 @@ export default function SignupPage() {
 
                     <p className="mt-6 text-center text-sm text-gray-500">
                         すでにアカウントをお持ちですか？{" "}
-                        <a href="/login" className="text-blue-600 hover:underline">
+                        <a href="/login" className="text-blue-600 hover:underline font-medium">
                             ログイン
                         </a>
                     </p>
