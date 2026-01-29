@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
+import { useState, useEffect } from "react";
+import { User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 function generateOrgSlug(name: string): string {
     return name
@@ -22,16 +23,10 @@ export default function OnboardingPage() {
     const [user, setUser] = useState<User | null>(null);
     const router = useRouter();
 
-    const supabase = useMemo<SupabaseClient | null>(() => {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (!url || !key) return null;
-        return createClient(url, key);
-    }, []);
-
     // Check authentication on mount
     useEffect(() => {
         async function checkAuth() {
+            const supabase = getSupabaseClient();
             if (!supabase) {
                 router.push("/login");
                 return;
@@ -49,7 +44,7 @@ export default function OnboardingPage() {
         }
 
         checkAuth();
-    }, [supabase, router]);
+    }, [router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

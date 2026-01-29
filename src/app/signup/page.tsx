@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
     const [email, setEmail] = useState("");
@@ -11,15 +11,10 @@ export default function SignupPage() {
     const [emailSent, setEmailSent] = useState(false);
     const [isExistingUser, setIsExistingUser] = useState(false);
 
-    const supabase = useMemo<SupabaseClient | null>(() => {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (!url || !key) return null;
-        return createClient(url, key);
-    }, []);
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const supabase = getSupabaseClient();
         if (!supabase) {
             setError("システムが正しく設定されていません");
             return;

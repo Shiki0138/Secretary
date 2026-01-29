@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useState, useMemo } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -13,19 +13,12 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
 
-  // Create Supabase client dynamically to avoid SSG errors
-  const supabase = useMemo<SupabaseClient | null>(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) return null;
-    return createClient(url, key);
-  }, []);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const supabase = getSupabaseClient();
     if (!supabase) {
-      setError("Supabase is not configured. Please set environment variables.");
+      setError("システムが正しく設定されていません");
       return;
     }
 
@@ -38,7 +31,14 @@ function LoginForm() {
     });
 
     if (error) {
-      setError(error.message);
+      // Translate common error messages
+      if (error.message.includes("Invalid login credentials")) {
+        setError("メールアドレスまたはパスワードが正しくありません");
+      } else if (error.message.includes("Email not confirmed")) {
+        setError("メールアドレスが確認されていません。確認メールをご確認ください");
+      } else {
+        setError(error.message);
+      }
       setLoading(false);
     } else {
       router.push(redirect);
@@ -64,7 +64,7 @@ function LoginForm() {
 
       <form className="mt-8 space-y-6" onSubmit={handleLogin}>
         {error && (
-          <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm">
+          <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg text-sm">
             {error}
           </div>
         )}
@@ -120,6 +120,13 @@ function LoginForm() {
           デモモードで開く（開発用）
         </button>
       </div>
+
+      <p className="mt-4 text-center text-sm text-gray-500">
+        アカウントをお持ちでない場合は{" "}
+        <a href="/signup" className="text-blue-600 hover:underline font-medium">
+          新規登録
+        </a>
+      </p>
     </div>
   );
 }
