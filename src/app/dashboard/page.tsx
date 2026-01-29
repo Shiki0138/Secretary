@@ -5,7 +5,7 @@ import { DocumentManager } from "@/components/dashboard/document-manager";
 import { InvitationManager } from "@/components/dashboard/invitation-manager";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { redirect } from "next/navigation";
+import { ClientAuthDashboard } from "./client-auth";
 
 // Demo data
 const DEMO_ORG = {
@@ -48,10 +48,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         return <DashboardUI org={DEMO_ORG.org} stats={DEMO_ORG.stats} isDemo={true} />;
     }
 
+    // Try server-side auth first
     const authUser = await getAuthenticatedUser();
-    if (!authUser) redirect("/login");
+
+    // If server auth fails, use client-side auth fallback
+    if (!authUser) {
+        return <ClientAuthDashboard />;
+    }
+
     const orgInfo = await getOrgInfo(authUser.id);
-    if (!orgInfo) redirect("/login");
+    if (!orgInfo) {
+        // User exists but has no organization - redirect to onboarding
+        return <ClientAuthDashboard />;
+    }
 
     return <DashboardUI org={orgInfo.org} stats={orgInfo.stats} isDemo={false} />;
 }
