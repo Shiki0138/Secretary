@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -9,9 +9,21 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
+
+  // Check existing session on mount
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setStatus(`既存セッション検出: ${session.user.email}`);
+      }
+    });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,9 +36,10 @@ function LoginForm() {
 
     setLoading(true);
     setError(null);
+    setStatus("ログイン処理中...");
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -36,44 +49,44 @@ function LoginForm() {
         if (error.message.includes("Invalid login credentials")) {
           setError("メールアドレスまたはパスワードが正しくありません");
         } else if (error.message.includes("Email not confirmed")) {
-          setError("メールアドレスが確認されていません。確認メールをご確認ください");
+          setError("メールアドレスが確認されていません。確認メールをご確認ください。Supabaseで確認メールの再送信が必要かもしれません。");
         } else {
           setError(error.message);
         }
+        setStatus(null);
         setLoading(false);
-      } else {
-        setSuccess(true);
-        // Wait for cookie to be set then redirect
-        setTimeout(() => {
-          window.location.href = redirect;
-        }, 1500);
+        return;
       }
+
+      setStatus(`ログイン成功: ${data.user?.email || "unknown"}`);
+
+      // Verify session was created
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        setError("セッションが作成されませんでした。ブラウザのcookieを許可してください。");
+        setLoading(false);
+        return;
+      }
+
+      setStatus(`セッション確認OK。3秒後にリダイレクト...`);
+
+      // Wait longer to ensure cookies are set
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Use replace to avoid back-button issues
+      window.location.replace(redirect);
     } catch (err) {
       console.error("Unexpected error:", err);
       setError("予期しないエラーが発生しました");
+      setStatus(null);
       setLoading(false);
     }
   };
 
-  const handleDemoLogin = () => {
+  const handleDemoLogin = useCallback(() => {
     const redirectUrl = redirect.includes("?") ? `${redirect}&demo=true` : `${redirect}?demo=true`;
     window.location.href = redirectUrl;
-  };
-
-  if (success) {
-    return (
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg text-center">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-          <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="text-2xl font-bold text-gray-900">ログイン成功！</h2>
-        <p className="text-gray-600">ダッシュボードに移動しています...</p>
-        <div className="animate-pulse text-blue-600">読み込み中...</div>
-      </div>
-    );
-  }
+  }, [redirect]);
 
   return (
     <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
@@ -90,6 +103,12 @@ function LoginForm() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg text-sm">
             {error}
+          </div>
+        )}
+
+        {status && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-600 p-4 rounded-lg text-sm">
+            {status}
           </div>
         )}
 
