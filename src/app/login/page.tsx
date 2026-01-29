@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -13,6 +13,21 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
+
+  // Check if already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      const supabase = getSupabaseClient();
+      if (!supabase) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setDebugInfo("既にログイン済み。リダイレクト中...");
+        window.location.href = redirect;
+      }
+    };
+    checkSession();
+  }, [redirect]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,15 +64,22 @@ function LoginForm() {
         console.log("Login success:", data);
         setDebugInfo(`ログイン成功！セッション確立中...`);
 
-        // Wait for session to be established in cookies
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for session cookies to be properly set
+        // Supabase SSR needs time to sync cookies
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Refresh session to ensure cookies are set
-        await supabase.auth.refreshSession();
-
-        setDebugInfo(`リダイレクト中: ${redirect}`);
-        // Use window.location for more reliable redirect
-        window.location.href = redirect;
+        // Double-check session is established
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          setDebugInfo(`セッション確認OK。リダイレクト: ${redirect}`);
+          // Full page reload to ensure server sees the new cookies
+          window.location.replace(redirect);
+        } else {
+          setDebugInfo(`セッションが確立されませんでした。再試行中...`);
+          // Try one more time after a longer delay
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          window.location.replace(redirect);
+        }
       }
     } catch (err) {
       console.error("Unexpected error:", err);
