@@ -3,14 +3,8 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-const DEMO_ORG = {
-    org: { id: "demo", name: "ログイン確認中...", slug: "loading" },
-    stats: { openCount: 0, weeklyCount: 0 },
-};
-
 export function ClientAuthDashboard() {
     const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
-    const [orgName, setOrgName] = useState("読み込み中...");
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -20,9 +14,10 @@ export function ClientAuthDashboard() {
                 return;
             }
 
-            const { data: { session } } = await supabase.auth.getSession();
+            // Use getUser() instead of getSession() - makes a request to Supabase
+            const { data: { user }, error } = await supabase.auth.getUser();
 
-            if (!session?.user) {
+            if (error || !user) {
                 // Not authenticated - redirect to login
                 setStatus("unauthenticated");
                 window.location.href = "/login?redirect=/dashboard";
@@ -35,7 +30,6 @@ export function ClientAuthDashboard() {
                 if (response.ok) {
                     const data = await response.json();
                     if (data.organization) {
-                        setOrgName(data.organization.name);
                         setStatus("authenticated");
                         // Reload to get server-side rendered dashboard
                         window.location.reload();
@@ -50,7 +44,8 @@ export function ClientAuthDashboard() {
                     window.location.href = "/onboarding";
                 }
             } catch {
-                setOrgName("エラー");
+                // API error - redirect to onboarding
+                window.location.href = "/onboarding";
             }
         };
 
@@ -86,7 +81,6 @@ export function ClientAuthDashboard() {
         <div className="min-h-dvh flex items-center justify-center bg-gray-50">
             <div className="text-center">
                 <div className="animate-pulse text-gray-500 mb-2">ダッシュボードを読み込み中...</div>
-                <p className="text-sm text-gray-400">{orgName}</p>
             </div>
         </div>
     );

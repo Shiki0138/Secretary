@@ -34,26 +34,28 @@ export default function OnboardingPage() {
                 return;
             }
 
-            // Try to get session
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            // Use getUser() instead of getSession() - this makes a request to Supabase
+            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-            if (sessionError) {
-                setStatus(`セッションエラー: ${sessionError.message}`);
-                setChecking(false);
-                return;
-            }
-
-            if (!session?.user) {
-                setStatus("セッションなし。ログインが必要です。");
-                // Wait a bit and redirect
+            if (authError) {
+                setStatus(`認証エラー: ${authError.message}`);
+                // Not authenticated - redirect to login
                 setTimeout(() => {
                     window.location.href = "/login?redirect=/onboarding";
                 }, 2000);
                 return;
             }
 
-            setStatus(`認証OK: ${session.user.email}`);
-            setUser(session.user);
+            if (!authUser) {
+                setStatus("ログインセッションがありません。");
+                setTimeout(() => {
+                    window.location.href = "/login?redirect=/onboarding";
+                }, 2000);
+                return;
+            }
+
+            setStatus(`認証OK: ${authUser.email}`);
+            setUser(authUser);
             setChecking(false);
         }
 
