@@ -13,7 +13,7 @@ function generateInviteCode(): string {
 
 export async function POST(request: NextRequest) {
     try {
-        const { name, slug, ownerName } = await request.json();
+        const { name, slug, ownerName, userId, email } = await request.json();
 
         if (!name || !slug || !ownerName) {
             return NextResponse.json(
@@ -22,29 +22,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get authenticated user from cookies
-        const cookieStore = await cookies();
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        // If userId is provided directly from client, use it
+        // Otherwise, try to get from session (fallback)
+        let authenticatedUserId = userId;
 
-        // Create client with user's session
-        const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-            global: {
-                headers: {
-                    cookie: cookieStore.toString(),
-                },
-            },
-        });
-
-        const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-
-        if (authError || !user) {
+        if (!authenticatedUserId) {
             return NextResponse.json(
-                { error: "認証が必要です" },
-                { status: 401 }
+                { error: "ユーザーIDが必要です" },
+                { status: 400 }
             );
         }
+
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
         // Use service role for database operations
         const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
@@ -74,7 +64,7 @@ export async function POST(request: NextRequest) {
         const { error: userError } = await supabaseAdmin
             .from("users")
             .insert({
-                id: user.id,
+                id: authenticatedUserId,
                 org_id: org.id,
                 display_name: ownerName,
                 role: "owner",
