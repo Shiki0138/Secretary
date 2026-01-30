@@ -272,7 +272,7 @@ async function handleUnregisteredUser(lineUserId: string, text: string, replyTok
 
     // Look up invitation code
     const codes = await supabaseFetch(
-        `/invitation_codes?code=eq.${code}&select=id,org_id,expires_at,used_count,max_uses,is_single_use`
+        `/invitation_codes?code=eq.${code}&select=id,org_id,expires_at,used_count,max_uses`
     );
 
     // Log attempt
@@ -299,8 +299,8 @@ async function handleUnregisteredUser(lineUserId: string, text: string, replyTok
         return;
     }
 
-    // Check if single-use and already used
-    if (invitation.is_single_use && invitation.used_count >= invitation.max_uses) {
+    // Check if already used up
+    if (invitation.max_uses && invitation.used_count >= invitation.max_uses) {
         await incrementRateLimit(lineUserId, "code_attempt");
         if (replyToken) {
             await replyToLine(replyToken, `この招待コードは使用済みです。
