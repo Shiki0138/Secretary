@@ -10,7 +10,7 @@ import { ClientAuthDashboard } from "./client-auth";
 // Demo data
 const DEMO_ORG = {
     org: { id: "demo", name: "デモ組織", slug: "demo-org" },
-    stats: { openCount: 2, weeklyCount: 8 },
+    stats: { openCount: 2, weeklyCount: 8, readRate: "92%", docsAcknowledged: "5/6" },
 };
 
 async function getOrgInfo(userId: string) {
@@ -23,13 +23,43 @@ async function getOrgInfo(userId: string) {
         .from("organizations").select("id, name, slug").eq("id", user.org_id).single();
     if (orgError || !org) return null;
 
+    // Conversation stats
     const { count: openCount } = await supabase.from("conversations")
         .select("*", { count: "exact", head: true }).eq("org_id", org.id).eq("status", "open");
     const { count: weeklyCount } = await supabase.from("conversations")
         .select("*", { count: "exact", head: true }).eq("org_id", org.id)
         .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
-    return { org, stats: { openCount: openCount || 0, weeklyCount: weeklyCount || 0 } };
+    // Announcement read rate
+    const { count: totalAnnouncements } = await supabase.from("announcements")
+        .select("*", { count: "exact", head: true }).eq("org_id", org.id);
+    const { count: totalEmployees } = await supabase.from("users")
+        .select("*", { count: "exact", head: true }).eq("org_id", org.id).eq("role", "employee");
+    const { count: totalReads } = await supabase.from("announcement_reads")
+        .select("*", { count: "exact", head: true })
+        .in("announcement_id",
+            (await supabase.from("announcements").select("id").eq("org_id", org.id)).data?.map(a => a.id) || []
+        );
+
+    const maxReads = (totalAnnouncements || 0) * (totalEmployees || 0);
+    const readRate = maxReads > 0 ? Math.round(((totalReads || 0) / maxReads) * 100) : 0;
+
+    // Document acknowledgment
+    const { count: totalDocs } = await supabase.from("knowledge_documents")
+        .select("*", { count: "exact", head: true }).eq("org_id", org.id);
+    const { count: acknowledgedDocs } = await supabase.from("document_reads")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+
+    return {
+        org,
+        stats: {
+            openCount: openCount || 0,
+            weeklyCount: weeklyCount || 0,
+            readRate: `${readRate}%`,
+            docsAcknowledged: `${acknowledgedDocs || 0}/${totalDocs || 0}`,
+        }
+    };
 }
 
 function LoadingFallback() {
@@ -67,7 +97,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
 function DashboardUI({ org, stats, isDemo }: {
     org: { id: string; name: string };
-    stats: { openCount: number; weeklyCount: number };
+    stats: { openCount: number; weeklyCount: number; readRate?: string; docsAcknowledged?: string };
     isDemo: boolean;
 }) {
     return (
@@ -95,8 +125,8 @@ function DashboardUI({ org, stats, isDemo }: {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
                     <StatCard label="今週の相談" value={stats.weeklyCount} />
                     <StatCard label="対応待ち" value={stats.openCount} isAlert />
-                    <StatCard label="お知らせ既読率" value="92%" />
-                    <StatCard label="規則確認済み" value="5/6" />
+                    <StatCard label="お知らせ既読率" value={stats.readRate || "0%"} />
+                    <StatCard label="規則確認済み" value={stats.docsAcknowledged || "0/0"} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
