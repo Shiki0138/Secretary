@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sendLinePushMessage } from "@/lib/line-push";
 
 // Supabase fetch helper
 async function supabaseFetch(path: string, options: RequestInit = {}) {
@@ -122,7 +123,33 @@ export async function POST(req: NextRequest) {
                 }),
             });
 
-            // TODO: LINEで従業員に通知（登録完了メッセージ）
+            // LINEで従業員に登録完了を通知
+            const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+            if (accessToken && registration.line_user_id) {
+                await sendLinePushMessage({
+                    accessToken,
+                    userId: registration.line_user_id,
+                    messages: [{
+                        type: "text",
+                        text: `登録が承認されました！🎉\n\nAI翻訳秘書へようこそ。\nこれでメッセージの送受信が可能になりました。\n\n何かありましたらお気軽にメッセージを送信してください。`
+                    }]
+                });
+            }
+        }
+
+        // 拒否の場合もLINEで通知
+        if (action === "reject") {
+            const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+            if (accessToken && registration.line_user_id) {
+                await sendLinePushMessage({
+                    accessToken,
+                    userId: registration.line_user_id,
+                    messages: [{
+                        type: "text",
+                        text: `申し訳ございませんが、登録が承認されませんでした。\n\n詳細については経営者にお問い合わせください。`
+                    }]
+                });
+            }
         }
 
         return NextResponse.json({
