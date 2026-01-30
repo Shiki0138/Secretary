@@ -483,61 +483,222 @@ async function logRegistrationAttempt(lineUserId: string, code: string, orgId: s
     }
 }
 
-async function handleEmployeeMessage(user: { id: string; org_id: string; display_name?: string }, text: string, replyToken: string, accessToken: string) {
-    // Translate message for owner
-    const translated = await translateMessage(text, "to_owner");
+async function getEmployeeState(employeeId: string) {
+    const states = await supabaseFetch(`/employee_conversation_state?employee_id=eq.${employeeId}&select=*`);
+    return states?.[0] || null;
+}
 
-    // Save to database
+async function setEmployeeState(employeeId: string, orgId: string, state: string, intentType?: string, context?: object, pendingMessage?: string) {
+    const existing = await getEmployeeState(employeeId);
+    const data = {
+        state,
+        intent_type: intentType || null,
+        context: context || {},
+        pending_message: pendingMessage || null,
+        updated_at: new Date().toISOString(),
+    };
+
+    if (existing) {
+        await supabaseFetch(`/employee_conversation_state?employee_id=eq.${employeeId}`, {
+            method: "PATCH",
+            body: JSON.stringify(data),
+        });
+    } else {
+        await supabaseFetch("/employee_conversation_state", {
+            method: "POST",
+            body: JSON.stringify({
+                employee_id: employeeId,
+                org_id: orgId,
+                ...data,
+            }),
+        });
+    }
+}
+
+async function analyzeIntentAndGenerateResponse(text: string, currentContext: object = {}): Promise<{
+    needsMoreInfo: boolean;
+    question?: string;
+    finalMessage?: string;
+    intentType: string;
+    updatedContext: object;
+}> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+        return {
+            needsMoreInfo: false,
+            finalMessage: text,
+            intentType: "other",
+            updatedContext: currentContext,
+        };
+    }
+
+    const systemPrompt = `あなたは従業員と経営者の間のコミュニケーションを仲介するAI秘書です。
+従業員からのメッセージを分析し、経営者に伝える前に必要な情報が揃っているか確認してください。
+
+現在収集済みの情報:
+${JSON.stringify(currentContext, null, 2)}
+
+あなたの役割:
+1. メッセージの意図を分析（シフト変更、休暇申請、質問、報告、その他）
+2. 経営者に伝えるために不足している情報を特定
+3. 不足情報があれば確認質問を生成
+4. 情報が十分であれば、経営者向けの整理されたメッセージを作成
+
+JSON形式で回答してください:
+{
+  "intentType": "shift_change" | "leave_request" | "question" | "report" | "other",
+  "needsMoreInfo": true | false,
+  "question": "不足情報を確認する質問（needsMoreInfoがtrueの場合）",
+  "finalMessage": "経営者に送信する整理されたメッセージ（needsMoreInfoがfalseの場合）",
+  "updatedContext": { "収集した情報をマージしたオブジェクト" },
+  "missingFields": ["不足している情報のリスト"]
+}
+
+重要:
+- シフト変更の場合は「いつからいつへ」「理由」が必要
+- 休暇申請の場合は「期間」「理由」が必要
+- 質問は明確か確認
+- 簡潔で丁寧な確認質問を生成
+- 最終メッセージは経営者が判断しやすい形式に整理`;
+
     try {
-        // Get or create conversation
-        const convs = await supabaseFetch(`/conversations?employee_id=eq.${user.id}&status=eq.open&select=id`);
-        let convId: string;
-        if (convs?.length > 0) {
-            convId = convs[0].id;
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: text },
+                ],
+                max_tokens: 800,
+                temperature: 0.3,
+                response_format: { type: "json_object" },
+            }),
+        });
+        const data = await response.json();
+        const result = JSON.parse(data.choices?.[0]?.message?.content || "{}");
+
+        return {
+            needsMoreInfo: result.needsMoreInfo ?? false,
+            question: result.question,
+            finalMessage: result.finalMessage,
+            intentType: result.intentType || "other",
+            updatedContext: result.updatedContext || currentContext,
+        };
+    } catch (e) {
+        console.error("Intent analysis error:", e);
+        return {
+            needsMoreInfo: false,
+            finalMessage: text,
+            intentType: "other",
+            updatedContext: currentContext,
+        };
+    }
+}
+
+async function handleEmployeeMessage(user: { id: string; org_id: string; display_name?: string }, text: string, replyToken: string, accessToken: string) {
+    const employeeState = await getEmployeeState(user.id);
+    const lowerText = text.toLowerCase().trim();
+
+    // 確認中の状態での応答処理
+    if (employeeState?.state === "confirming" && employeeState.pending_message) {
+        if (lowerText === "はい" || lowerText === "ok" || lowerText === "送信" || lowerText === "yes") {
+            // 送信実行
+            const messageToSend = employeeState.pending_message;
+
+            // Save to database
+            try {
+                const convs = await supabaseFetch(`/conversations?employee_id=eq.${user.id}&status=eq.open&select=id`);
+                let convId: string;
+                if (convs?.length > 0) {
+                    convId = convs[0].id;
+                } else {
+                    const newConv = await supabaseFetch("/conversations", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            org_id: user.org_id,
+                            employee_id: user.id,
+                            status: "open",
+                            subject: messageToSend.slice(0, 50),
+                        }),
+                    });
+                    convId = newConv?.[0]?.id;
+                }
+
+                if (convId) {
+                    await supabaseFetch("/messages", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            conversation_id: convId,
+                            sender_type: "employee",
+                            sender_id: user.id,
+                            original_content: messageToSend,
+                            translated_content: messageToSend,
+                            channel: "line",
+                        }),
+                    });
+                }
+            } catch (err) {
+                console.error("DB save error:", err);
+            }
+
+            // Notify owner
+            const owner = await getOwnerByOrgId(user.org_id);
+            if (owner?.line_user_id) {
+                await notifyOwnerNewMessage(
+                    accessToken,
+                    owner.line_user_id,
+                    user.display_name || "従業員",
+                    messageToSend
+                );
+            }
+
+            // Reset state and reply
+            await setEmployeeState(user.id, user.org_id, "idle");
+            if (replyToken) {
+                await replyToLine(replyToken, "✅ メッセージを送信しました。経営者からの返信をお待ちください。", accessToken);
+            }
+            return;
+        } else if (lowerText === "キャンセル" || lowerText === "cancel" || lowerText === "いいえ" || lowerText === "no") {
+            // キャンセル
+            await setEmployeeState(user.id, user.org_id, "idle");
+            if (replyToken) {
+                await replyToLine(replyToken, "キャンセルしました。また何かありましたらお気軽にメッセージをお送りください。", accessToken);
+            }
+            return;
         } else {
-            const newConv = await supabaseFetch("/conversations", {
-                method: "POST",
-                body: JSON.stringify({
-                    org_id: user.org_id,
-                    employee_id: user.id,
-                    status: "open",
-                    subject: translated.slice(0, 50),
-                }),
-            });
-            convId = newConv?.[0]?.id;
+            // 修正として扱う - 新しいメッセージとして処理
+            await setEmployeeState(user.id, user.org_id, "idle");
         }
-
-        if (convId) {
-            await supabaseFetch("/messages", {
-                method: "POST",
-                body: JSON.stringify({
-                    conversation_id: convId,
-                    sender_type: "employee",
-                    sender_id: user.id,
-                    original_content: text,
-                    translated_content: translated,
-                    channel: "line",
-                }),
-            });
-        }
-    } catch (err) {
-        console.error("DB save error:", err);
     }
 
-    // Notify owner
-    const owner = await getOwnerByOrgId(user.org_id);
-    if (owner?.line_user_id) {
-        await notifyOwnerNewMessage(
-            accessToken,
-            owner.line_user_id,
-            user.display_name || "従業員",
-            translated
-        );
-    }
+    // 情報収集中の場合は既存のコンテキストを使用
+    const currentContext = employeeState?.state === "gathering" ? (employeeState.context || {}) : {};
 
-    // Reply to employee
-    if (replyToken) {
-        await replyToLine(replyToken, "メッセージを受け付けました。経営者に安全にお伝えします。", accessToken);
+    // AI意図分析
+    const analysis = await analyzeIntentAndGenerateResponse(text, currentContext);
+
+    if (analysis.needsMoreInfo && analysis.question) {
+        // 追加情報が必要 - 質問を送信
+        await setEmployeeState(user.id, user.org_id, "gathering", analysis.intentType, analysis.updatedContext);
+        if (replyToken) {
+            await replyToLine(replyToken, `承知しました。確認させてください。\n\n${analysis.question}`, accessToken);
+        }
+    } else if (analysis.finalMessage) {
+        // 情報が十分 - 確認を求める
+        await setEmployeeState(user.id, user.org_id, "confirming", analysis.intentType, analysis.updatedContext, analysis.finalMessage);
+        if (replyToken) {
+            await replyToLine(replyToken, `📝 以下のメッセージを経営者に送信します：\n\n「${analysis.finalMessage}」\n\n━━━━━━━━━━━━\n✅ 送信する→「はい」と返信\n✏️ 修正する→修正内容を入力\n❌ キャンセル→「キャンセル」と返信`, accessToken);
+        }
+    } else {
+        // エラーの場合はそのまま送信
+        if (replyToken) {
+            await replyToLine(replyToken, "申し訳ございません、内容を理解できませんでした。もう一度お試しください。", accessToken);
+        }
     }
 }
 
