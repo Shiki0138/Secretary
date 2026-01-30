@@ -85,7 +85,17 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
             ...(options.headers || {}),
         },
     });
-    return response.json();
+
+    // Handle 204 No Content and empty responses
+    const text = await response.text();
+    if (!text) return null;
+
+    try {
+        return JSON.parse(text);
+    } catch {
+        console.error("[SUPABASE] Failed to parse response:", text.substring(0, 100));
+        return null;
+    }
 }
 
 async function getUserByLineId(lineUserId: string) {
