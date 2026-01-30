@@ -174,21 +174,33 @@ async function findEmployeeByName(orgId: string, name: string) {
 }
 
 export async function POST(request: NextRequest) {
+    console.log("[WEBHOOK] Received request");
     try {
         const body = await request.text();
         const signature = request.headers.get("x-line-signature");
         const channelSecret = process.env.LINE_CHANNEL_SECRET;
         const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
+        console.log("[WEBHOOK] Config check:", {
+            hasSecret: !!channelSecret,
+            hasToken: !!channelAccessToken,
+            hasSignature: !!signature
+        });
+
         if (!channelSecret || !channelAccessToken) {
+            console.log("[WEBHOOK] Missing config");
             return NextResponse.json({ error: "Not configured" }, { status: 500 });
         }
         if (!signature || !verifySignature(body, signature, channelSecret)) {
+            console.log("[WEBHOOK] Signature verification failed");
             return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
         }
 
+        console.log("[WEBHOOK] Signature verified, parsing body");
         const parsedBody = JSON.parse(body);
         const events = parsedBody.events || [];
+
+        console.log("[WEBHOOK] Events count:", events.length);
 
         if (events.length === 0) {
             return NextResponse.json({ success: true });
@@ -198,14 +210,24 @@ export async function POST(request: NextRequest) {
             const userId = event.source?.userId;
             const replyToken = event.replyToken;
 
+            console.log("[WEBHOOK] Processing event:", {
+                type: event.type,
+                userId: userId?.substring(0, 10) + "...",
+                hasReplyToken: !!replyToken
+            });
+
             if (!userId) continue;
 
             if (event.type === "message" && event.message?.type === "text") {
                 const text = event.message.text.trim();
+                console.log("[WEBHOOK] Text message received:", text);
+
                 const user = await getUserByLineId(userId);
+                console.log("[WEBHOOK] User lookup result:", user ? `Found: ${user.role}` : "Not found");
 
                 if (!user) {
                     // Unregistered user - handle invitation code input
+                    console.log("[WEBHOOK] Handling unregistered user");
                     await handleUnregisteredUser(userId, text, replyToken, channelAccessToken);
                     continue;
                 }
@@ -218,6 +240,7 @@ export async function POST(request: NextRequest) {
                     await handleEmployeeMessage(user, text, replyToken, channelAccessToken);
                 }
             } else if (event.type === "follow") {
+                console.log("[WEBHOOK] Follow event");
                 await replyToLine(replyToken, `AI翻訳秘書へようこそ！👋
 
 経営者から受け取った8桁の招待コードを入力してください。
@@ -226,19 +249,24 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        console.log("[WEBHOOK] Processing complete");
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error("LINE webhook error:", error);
+        console.error("[WEBHOOK] Error:", error);
         return NextResponse.json({ success: true });
     }
 }
 
 // Handle unregistered user - invitation code flow
 async function handleUnregisteredUser(lineUserId: string, text: string, replyToken: string, accessToken: string) {
+    console.log("[UNREGISTERED] Processing:", { lineUserId: lineUserId.substring(0, 10), text });
+
     // Check if user is already pending approval
     const pendingRegs = await supabaseFetch(
         `/pending_registrations?line_user_id=eq.${lineUserId}&status=eq.pending&select=id,org_id`
     );
+    console.log("[UNREGISTERED] Pending registrations:", pendingRegs?.length || 0);
+
     if (pendingRegs?.length > 0) {
         if (replyToken) {
             await replyToLine(replyToken, `現在、経営者の承認待ちです。
@@ -249,6 +277,8 @@ async function handleUnregisteredUser(lineUserId: string, text: string, replyTok
 
     // Check rate limit
     const isBlocked = await checkRateLimit(lineUserId, "code_attempt");
+    console.log("[UNREGISTERED] Rate limit blocked:", isBlocked);
+
     if (isBlocked) {
         if (replyToken) {
             await replyToLine(replyToken, `試行回数が多すぎます。
@@ -259,7 +289,10 @@ async function handleUnregisteredUser(lineUserId: string, text: string, replyTok
 
     // Validate code format (8 alphanumeric characters)
     const codePattern = /^[A-Z0-9]{8}$/i;
-    if (!codePattern.test(text)) {
+    const isValidFormat = codePattern.test(text);
+    console.log("[UNREGISTERED] Code format valid:", isValidFormat, "text:", text);
+
+    if (!isValidFormat) {
         if (replyToken) {
             await replyToLine(replyToken, `8桁の招待コードを入力してください。
 
