@@ -101,7 +101,7 @@ export function InvitationManager({ orgId, isDemo = false }: Props) {
                 created_at: new Date().toISOString(),
             };
             setCodes([newCode, ...codes]);
-            setSuccess("招待コードを発行しました（デモ）");
+            setSuccess("招待コードを発行しました");
             setTimeout(() => setSuccess(null), 3000);
             return;
         }
@@ -144,7 +144,7 @@ export function InvitationManager({ orgId, isDemo = false }: Props) {
     const handleApproval = async (regId: string, action: "approve" | "reject") => {
         if (isDemo) {
             setPendingRegs(pendingRegs.filter((r) => r.id !== regId));
-            setSuccess(action === "approve" ? "従業員を承認しました（デモ）" : "登録を拒否しました（デモ）");
+            setSuccess(action === "approve" ? "従業員を承認しました" : "登録を拒否しました");
             setTimeout(() => setSuccess(null), 3000);
             return;
         }
@@ -269,8 +269,8 @@ export function InvitationManager({ orgId, isDemo = false }: Props) {
                             <div
                                 key={code.id}
                                 className={`border rounded-lg p-4 flex items-center justify-between ${code.status === "active"
-                                        ? "border-green-200 bg-green-50"
-                                        : "border-gray-200 bg-gray-50"
+                                    ? "border-green-200 bg-green-50"
+                                    : "border-gray-200 bg-gray-50"
                                     }`}
                             >
                                 <div className="flex items-center gap-4">
@@ -279,10 +279,10 @@ export function InvitationManager({ orgId, isDemo = false }: Props) {
                                     </code>
                                     <span
                                         className={`text-xs px-2 py-1 rounded-full font-medium ${code.status === "active"
-                                                ? "bg-green-100 text-green-700"
-                                                : code.status === "used"
-                                                    ? "bg-gray-100 text-gray-600"
-                                                    : "bg-red-100 text-red-600"
+                                            ? "bg-green-100 text-green-700"
+                                            : code.status === "used"
+                                                ? "bg-gray-100 text-gray-600"
+                                                : "bg-red-100 text-red-600"
                                             }`}
                                     >
                                         {code.status === "active"

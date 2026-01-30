@@ -198,14 +198,7 @@ export function JoinPageClient({ code }: { code: string }) {
                             LINEでログイン
                         </button>
 
-                        {/* Demo mode for testing */}
-                        <button
-                            onClick={handleDemoComplete}
-                            disabled={loading}
-                            className="w-full py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
-                        >
-                            {loading ? "処理中..." : "デモモードで登録（開発用）"}
-                        </button>
+
 
                         <p className="text-xs text-gray-500 text-center mt-4">
                             LINEアカウントを使って安全に登録します。<br />

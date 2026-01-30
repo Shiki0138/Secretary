@@ -78,10 +78,6 @@ function LoginForm() {
     }
   };
 
-  const handleDemoLogin = useCallback(() => {
-    const redirectUrl = redirect.includes("?") ? `${redirect}&demo=true` : `${redirect}?demo=true`;
-    window.location.href = redirectUrl;
-  }, [redirect]);
 
   return (
     <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
@@ -150,14 +146,6 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="mt-4">
-        <button
-          onClick={handleDemoLogin}
-          className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-        >
-          デモモードで開く（開発用）
-        </button>
-      </div>
 
       <p className="mt-4 text-center text-sm text-gray-500">
         アカウントをお持ちでない場合は{" "}

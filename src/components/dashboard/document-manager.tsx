@@ -48,7 +48,7 @@ export function DocumentManager({ isDemo = false }: { isDemo?: boolean }) {
             setIsAdding(false);
             setTitle("");
             setContent("");
-            setSuccess("ドキュメントを登録しました（デモ）");
+            setSuccess("ドキュメントを登録しました");
             setTimeout(() => setSuccess(null), 3000);
             return;
         }
