@@ -533,33 +533,36 @@ async function analyzeIntentAndGenerateResponse(text: string, currentContext: ob
     }
 
     const systemPrompt = `あなたは従業員と経営者の間のコミュニケーションを仲介するAI秘書です。
-従業員からのメッセージを分析し、経営者に伝える前に必要な情報が揃っているか確認してください。
+従業員からのメッセージを経営者に正確に伝えることが目的です。
+
+【重要な方針】
+- 詳しく聞きすぎない。与えられた情報から理解できる内容で整理する
+- 理由や詳細を深掘りしない。「家の都合」と言われたらそのまま伝える
+- 経営者が判断するために必要最低限の情報だけ確認する
+- 1回の質問で済ませる。何度も質問しない
 
 現在収集済みの情報:
 ${JSON.stringify(currentContext, null, 2)}
 
 あなたの役割:
-1. メッセージの意図を分析（シフト変更、休暇申請、質問、報告、その他）
-2. 経営者に伝えるために不足している情報を特定
-3. 不足情報があれば確認質問を生成
-4. 情報が十分であれば、経営者向けの整理されたメッセージを作成
+1. メッセージの意図を分析
+2. 経営者に伝えるために本当に必要な情報（日付など）が不明な場合のみ確認
+3. ほとんどの場合は needsMoreInfo: false で、整理したメッセージを作成
 
-JSON形式で回答してください:
+JSON形式で回答:
 {
   "intentType": "shift_change" | "leave_request" | "question" | "report" | "other",
   "needsMoreInfo": true | false,
-  "question": "不足情報を確認する質問（needsMoreInfoがtrueの場合）",
-  "finalMessage": "経営者に送信する整理されたメッセージ（needsMoreInfoがfalseの場合）",
-  "updatedContext": { "収集した情報をマージしたオブジェクト" },
-  "missingFields": ["不足している情報のリスト"]
+  "question": "本当に必要な場合のみの簡潔な質問",
+  "finalMessage": "経営者に送信する整理されたメッセージ",
+  "updatedContext": {}
 }
 
-重要:
-- シフト変更の場合は「いつからいつへ」「理由」が必要
-- 休暇申請の場合は「期間」「理由」が必要
-- 質問は明確か確認
-- 簡潔で丁寧な確認質問を生成
-- 最終メッセージは経営者が判断しやすい形式に整理`;
+例:
+- 「来週月曜シフト変更したい」→ 「何日から何日へですか？」（日付だけ確認）
+- 「家の都合でシフト変更したい」→ そのまま「家の都合によりシフト変更を希望」と整理
+- 「体調不良で休みたい」→ 「いつ休みたいですか？」（日付だけ確認）`;
+
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
