@@ -227,12 +227,28 @@ function ConversationDetail({ conversation, onStatusChange }: ConversationDetail
     };
 
     const handleSend = async () => {
-        if (!response.trim()) return;
+        if (!response.trim() || !conversation) return;
         setIsSending(true);
 
         try {
-            // TODO: Implement send message API
-            // For now, just update status
+            // Send message via LINE
+            const sendRes = await fetch("/api/conversations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    conversationId: conversation.id,
+                    message: response,
+                    employeeId: conversation.employeeId,
+                }),
+            });
+
+            const sendData = await sendRes.json();
+            if (!sendData.success) {
+                alert(sendData.error || "送信に失敗しました");
+                return;
+            }
+
+            // Update status to resolved
             await fetch("/api/conversations", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -241,10 +257,13 @@ function ConversationDetail({ conversation, onStatusChange }: ConversationDetail
                     status: "resolved",
                 }),
             });
+
             setResponse("");
             onStatusChange();
+            alert("返信を送信しました");
         } catch (error) {
             console.error("Send error:", error);
+            alert("送信に失敗しました");
         } finally {
             setIsSending(false);
         }
