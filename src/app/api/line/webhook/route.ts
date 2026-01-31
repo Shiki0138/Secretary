@@ -525,24 +525,48 @@ async function formatMessageForOwner(text: string): Promise<string> {
     const today = new Date();
     const jstOffset = 9 * 60 * 60 * 1000;
     const jstDate = new Date(today.getTime() + jstOffset);
-    const dateStr = `${jstDate.getFullYear()}年${jstDate.getMonth() + 1}月${jstDate.getDate()}日`;
+
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    const todayWeekday = weekdays[jstDate.getUTCDay()];
+    const dateStr = `${jstDate.getFullYear()}年${jstDate.getMonth() + 1}月${jstDate.getDate()}日(${todayWeekday})`;
+
+    // 明日の日付
+    const tomorrow = new Date(jstDate.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowStr = `${tomorrow.getMonth() + 1}月${tomorrow.getDate()}日(${weekdays[tomorrow.getUTCDay()]})`;
+
+    // 来週の各曜日の日付を計算
+    const nextWeekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+        const daysUntilNextWeek = (7 - jstDate.getUTCDay() + i) % 7 + 7; // 来週の同じ曜日
+        if (daysUntilNextWeek <= 7) continue; // 今週はスキップ
+        const nextDate = new Date(jstDate.getTime() + daysUntilNextWeek * 24 * 60 * 60 * 1000);
+        nextWeekDates.push(`来週${weekdays[i]}: ${nextDate.getMonth() + 1}月${nextDate.getDate()}日`);
+    }
+
+    // よりシンプルに：今日から14日間の日付を生成
+    const dateReference: string[] = [];
+    for (let i = 0; i <= 14; i++) {
+        const d = new Date(jstDate.getTime() + i * 24 * 60 * 60 * 1000);
+        const label = i === 0 ? '今日' : i === 1 ? '明日' : i === 2 ? '明後日' : '';
+        dateReference.push(`${d.getMonth() + 1}/${d.getDate()}(${weekdays[d.getUTCDay()]})${label ? '=' + label : ''}`);
+    }
 
     const systemPrompt = `あなたはメッセージを整理するアシスタントです。
 従業員からのメッセージを経営者に伝えやすい形に整理してください。
 
-今日の日付: ${dateStr}
+【重要】今日: ${dateStr}
+日付カレンダー: ${dateReference.join(', ')}
 
 ルール:
-- 「明日」「来週」などは具体的な日付に変換する
+- 「明日」「来週金曜日」などは上のカレンダーを参照して正確な日付に変換
+- 来週◯曜日 = 今週の同じ曜日の7日後
 - 内容を補完したり質問したりしない
 - 与えられた情報だけで整理する
-- 意図は変えない
 - 簡潔にまとめる
 
 例:
-- 「明日休みたい」→「◯月◯日(曜日)の休暇を希望します」
-- 「シフト変更したい」→「シフト変更を希望しています」
-- 「体調悪いので早退したい」→「体調不良のため早退を希望します」`;
+- 「明日休みたい」→「${tomorrowStr}の休暇を希望します」
+- 「シフト変更したい」→「シフト変更を希望しています」`;
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
