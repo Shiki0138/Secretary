@@ -515,54 +515,34 @@ async function setEmployeeState(employeeId: string, orgId: string, state: string
     }
 }
 
-async function analyzeIntentAndGenerateResponse(text: string, currentContext: object = {}): Promise<{
-    needsMoreInfo: boolean;
-    question?: string;
-    finalMessage?: string;
-    intentType: string;
-    updatedContext: object;
-}> {
+async function formatMessageForOwner(text: string): Promise<string> {
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) {
-        return {
-            needsMoreInfo: false,
-            finalMessage: text,
-            intentType: "other",
-            updatedContext: currentContext,
-        };
+        return text;
     }
 
-    const systemPrompt = `あなたは従業員と経営者の間のコミュニケーションを仲介するAI秘書です。
-従業員からのメッセージを経営者に正確に伝えることが目的です。
+    // 今日の日付を取得（日本時間）
+    const today = new Date();
+    const jstOffset = 9 * 60 * 60 * 1000;
+    const jstDate = new Date(today.getTime() + jstOffset);
+    const dateStr = `${jstDate.getFullYear()}年${jstDate.getMonth() + 1}月${jstDate.getDate()}日`;
 
-【重要な方針】
-- 詳しく聞きすぎない。与えられた情報から理解できる内容で整理する
-- 理由や詳細を深掘りしない。「家の都合」と言われたらそのまま伝える
-- 経営者が判断するために必要最低限の情報だけ確認する
-- 1回の質問で済ませる。何度も質問しない
+    const systemPrompt = `あなたはメッセージを整理するアシスタントです。
+従業員からのメッセージを経営者に伝えやすい形に整理してください。
 
-現在収集済みの情報:
-${JSON.stringify(currentContext, null, 2)}
+今日の日付: ${dateStr}
 
-あなたの役割:
-1. メッセージの意図を分析
-2. 経営者に伝えるために本当に必要な情報（日付など）が不明な場合のみ確認
-3. ほとんどの場合は needsMoreInfo: false で、整理したメッセージを作成
-
-JSON形式で回答:
-{
-  "intentType": "shift_change" | "leave_request" | "question" | "report" | "other",
-  "needsMoreInfo": true | false,
-  "question": "本当に必要な場合のみの簡潔な質問",
-  "finalMessage": "経営者に送信する整理されたメッセージ",
-  "updatedContext": {}
-}
+ルール:
+- 「明日」「来週」などは具体的な日付に変換する
+- 内容を補完したり質問したりしない
+- 与えられた情報だけで整理する
+- 意図は変えない
+- 簡潔にまとめる
 
 例:
-- 「来週月曜シフト変更したい」→ 「何日から何日へですか？」（日付だけ確認）
-- 「家の都合でシフト変更したい」→ そのまま「家の都合によりシフト変更を希望」と整理
-- 「体調不良で休みたい」→ 「いつ休みたいですか？」（日付だけ確認）`;
-
+- 「明日休みたい」→「◯月◯日(曜日)の休暇を希望します」
+- 「シフト変更したい」→「シフト変更を希望しています」
+- 「体調悪いので早退したい」→「体調不良のため早退を希望します」`;
 
     try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -577,29 +557,15 @@ JSON形式で回答:
                     { role: "system", content: systemPrompt },
                     { role: "user", content: text },
                 ],
-                max_tokens: 800,
+                max_tokens: 200,
                 temperature: 0.3,
-                response_format: { type: "json_object" },
             }),
         });
         const data = await response.json();
-        const result = JSON.parse(data.choices?.[0]?.message?.content || "{}");
-
-        return {
-            needsMoreInfo: result.needsMoreInfo ?? false,
-            question: result.question,
-            finalMessage: result.finalMessage,
-            intentType: result.intentType || "other",
-            updatedContext: result.updatedContext || currentContext,
-        };
+        return data.choices?.[0]?.message?.content?.trim() || text;
     } catch (e) {
-        console.error("Intent analysis error:", e);
-        return {
-            needsMoreInfo: false,
-            finalMessage: text,
-            intentType: "other",
-            updatedContext: currentContext,
-        };
+        console.error("Format message error:", e);
+        return text;
     }
 }
 
@@ -674,34 +640,18 @@ async function handleEmployeeMessage(user: { id: string; org_id: string; display
             }
             return;
         } else {
-            // 修正として扱う - 新しいメッセージとして処理
+            // 修正内容として扱う - そのまま新しいメッセージとして処理
             await setEmployeeState(user.id, user.org_id, "idle");
         }
     }
 
-    // 情報収集中の場合は既存のコンテキストを使用
-    const currentContext = employeeState?.state === "gathering" ? (employeeState.context || {}) : {};
+    // メッセージを整理して確認画面を表示
+    const formattedMessage = await formatMessageForOwner(text);
 
-    // AI意図分析
-    const analysis = await analyzeIntentAndGenerateResponse(text, currentContext);
-
-    if (analysis.needsMoreInfo && analysis.question) {
-        // 追加情報が必要 - 質問を送信
-        await setEmployeeState(user.id, user.org_id, "gathering", analysis.intentType, analysis.updatedContext);
-        if (replyToken) {
-            await replyToLine(replyToken, `承知しました。確認させてください。\n\n${analysis.question}`, accessToken);
-        }
-    } else if (analysis.finalMessage) {
-        // 情報が十分 - 確認を求める
-        await setEmployeeState(user.id, user.org_id, "confirming", analysis.intentType, analysis.updatedContext, analysis.finalMessage);
-        if (replyToken) {
-            await replyToLine(replyToken, `📝 以下のメッセージを経営者に送信します：\n\n「${analysis.finalMessage}」\n\n━━━━━━━━━━━━\n✅ 送信する→「はい」と返信\n✏️ 修正する→修正内容を入力\n❌ キャンセル→「キャンセル」と返信`, accessToken);
-        }
-    } else {
-        // エラーの場合はそのまま送信
-        if (replyToken) {
-            await replyToLine(replyToken, "申し訳ございません、内容を理解できませんでした。もう一度お試しください。", accessToken);
-        }
+    // 確認を求める
+    await setEmployeeState(user.id, user.org_id, "confirming", undefined, undefined, formattedMessage);
+    if (replyToken) {
+        await replyToLine(replyToken, `📝 以下の内容を経営者に送信します：\n\n「${formattedMessage}」\n\n━━━━━━━━━━━━\n✅ 送信する→「はい」と返信\n❌ キャンセル→「キャンセル」と返信`, accessToken);
     }
 }
 
