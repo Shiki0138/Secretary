@@ -7,12 +7,87 @@ import {
 } from "@/services/conversation.service";
 import { getUserById } from "@/services/user.service";
 import { getAuthUser, verifyAccess, unauthorizedResponse, forbiddenResponse } from "@/lib/auth";
+import { sendLinePushMessage } from "@/lib/line-push";
 
 /**
  * Conversations API
  *
  * Manages employee-owner conversations
  */
+
+const replySchema = z.object({
+    conversationId: z.string().uuid(),
+    message: z.string().min(1),
+    employeeId: z.string().uuid(),
+});
+
+// Send a reply to employee via LINE
+export async function POST(request: NextRequest) {
+    try {
+        // Authenticate user
+        const { user, error: authError } = await getAuthUser();
+        if (authError || !user) {
+            return unauthorizedResponse();
+        }
+
+        // Only owners/managers can send replies
+        if (user.role === "staff") {
+            return forbiddenResponse("Only managers can send replies");
+        }
+
+        const body = await request.json();
+        const { conversationId, message, employeeId } = replySchema.parse(body);
+
+        // Get employee info
+        const employee = await getUserById(employeeId);
+        if (!employee || !employee.line_user_id) {
+            return NextResponse.json(
+                { success: false, error: "従業員のLINE IDが見つかりません" },
+                { status: 400 }
+            );
+        }
+
+        // Send LINE message
+        const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+        if (!accessToken) {
+            return NextResponse.json(
+                { success: false, error: "LINE設定がありません" },
+                { status: 500 }
+            );
+        }
+
+        await sendLinePushMessage({
+            accessToken,
+            userId: employee.line_user_id,
+            messages: [{
+                type: "text",
+                text: `📩 経営者からの返信:\n\n${message}`
+            }]
+        });
+
+        // Save message to database (optional - for logging)
+        // You could add this if needed
+
+        return NextResponse.json({
+            success: true,
+            message: "返信を送信しました",
+        });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            return NextResponse.json(
+                { success: false, error: "Validation error", details: error.issues },
+                { status: 400 }
+            );
+        }
+
+        console.error("Send reply error:", error);
+        return NextResponse.json(
+            { success: false, error: "返信の送信に失敗しました" },
+            { status: 500 }
+        );
+    }
+}
+
 
 // Get conversations for an organization
 export async function GET(request: NextRequest) {
@@ -40,7 +115,7 @@ export async function GET(request: NextRequest) {
 
             // 原文はシステム管理者のみアクセス可能（プライバシー保護）
             const canViewOriginal = user.role === 'system_admin';
-            
+
             return NextResponse.json({
                 success: true,
                 data: {
