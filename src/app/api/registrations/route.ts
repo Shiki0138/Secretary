@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendLinePushMessage } from "@/lib/line-push";
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from "@/lib/auth";
 
 // Supabase fetch helper
 async function supabaseFetch(path: string, options: RequestInit = {}) {
@@ -35,13 +36,21 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
 // GET: 承認待ち従業員一覧を取得
 export async function GET(req: NextRequest) {
     try {
-        const { searchParams } = new URL(req.url);
-        const orgId = searchParams.get("orgId");
-        const status = searchParams.get("status") || "pending";
-
-        if (!orgId) {
-            return NextResponse.json({ error: "Organization ID is required" }, { status: 400 });
+        // 🔒 認証チェック
+        const { user, error: authError } = await getAuthUser();
+        if (authError || !user) {
+            return unauthorizedResponse();
         }
+
+        // 🔒 スタッフは承認待ち一覧閲覧不可
+        if (user.role === "staff") {
+            return forbiddenResponse("Only owners/managers can view pending registrations");
+        }
+
+        // 🔒 自組織の承認待ちのみ取得
+        const orgId = user.orgId;
+        const { searchParams } = new URL(req.url);
+        const status = searchParams.get("status") || "pending";
 
         const registrations = await supabaseFetch(
             `/pending_registrations?org_id=eq.${orgId}&status=eq.${status}&order=created_at.desc`
@@ -57,11 +66,23 @@ export async function GET(req: NextRequest) {
     }
 }
 
+
 // POST: 従業員登録を承認または拒否
 export async function POST(req: NextRequest) {
     try {
+        // 🔒 認証チェック
+        const { user, error: authError } = await getAuthUser();
+        if (authError || !user) {
+            return unauthorizedResponse();
+        }
+
+        // 🔒 スタッフは承認/拒否不可
+        if (user.role === "staff") {
+            return forbiddenResponse("Only owners/managers can process registrations");
+        }
+
         const body = await req.json();
-        const { registrationId, action, processedBy, rejectionReason } = body;
+        const { registrationId, action, rejectionReason } = body;
 
         if (!registrationId || !action) {
             return NextResponse.json(
@@ -91,12 +112,18 @@ export async function POST(req: NextRequest) {
 
         const registration = registrations[0];
 
+        // 🔒 自組織の登録のみ承認/拒否可能
+        if (registration.org_id !== user.orgId) {
+            return forbiddenResponse("Cannot process registrations from other organizations");
+        }
+
         if (registration.status !== "pending") {
             return NextResponse.json(
                 { error: "Registration already processed" },
                 { status: 400 }
             );
         }
+
 
         // ステータス更新
         const newStatus = action === "approve" ? "approved" : "rejected";
@@ -105,7 +132,7 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
                 status: newStatus,
                 processed_at: new Date().toISOString(),
-                processed_by: processedBy || null,
+                processed_by: user.id,
                 rejection_reason: action === "reject" ? rejectionReason : null,
             }),
         });

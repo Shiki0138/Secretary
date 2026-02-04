@@ -111,6 +111,19 @@ export async function GET(request: NextRequest) {
 
         // If specific conversation requested, return with messages
         if (conversationId) {
+            // 🔒 会話の所有者チェック
+            const conversations = await getConversations(orgId);
+            const conversation = conversations.find(c => c.id === conversationId);
+
+            if (!conversation) {
+                return forbiddenResponse("Conversation not found or access denied");
+            }
+
+            // 🔒 スタッフは自分の会話のみアクセス可能
+            if (user.role === "staff" && conversation.employee_id !== user.id) {
+                return forbiddenResponse("You can only view your own conversations");
+            }
+
             const messages = await getMessages(conversationId);
 
             // 原文はシステム管理者のみアクセス可能（プライバシー保護）
@@ -134,6 +147,7 @@ export async function GET(request: NextRequest) {
                 },
             });
         }
+
 
         // Get all conversations
         const conversations = await getConversations(orgId, status || undefined);

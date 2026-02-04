@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from "@/lib/auth";
 
 // Supabase fetch helper
 async function supabaseFetch(path: string, options: RequestInit = {}) {
@@ -30,7 +31,7 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
     return text ? JSON.parse(text) : null;
 }
 
-// 8文字の招待コードを生成
+// 8文字の招待コードを生成（暗号学的に安全）
 function generateInvitationCode(): string {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 紛らわしい文字を除外
     const bytes = crypto.randomBytes(8);
@@ -44,12 +45,22 @@ function generateInvitationCode(): string {
 // POST: 招待コードを発行
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const { orgId, createdBy, expiresInHours = 24, isSingleUse = true } = body;
-
-        if (!orgId) {
-            return NextResponse.json({ error: "Organization ID is required" }, { status: 400 });
+        // 🔒 認証チェック
+        const { user, error: authError } = await getAuthUser();
+        if (authError || !user) {
+            return unauthorizedResponse();
         }
+
+        // 🔒 スタッフは招待コード発行不可
+        if (user.role === "staff") {
+            return forbiddenResponse("Only owners/managers can create invitation codes");
+        }
+
+        const body = await req.json();
+        const { expiresInHours = 24, isSingleUse = true } = body;
+
+        // 🔒 自組織のコードのみ発行可能
+        const orgId = user.orgId;
 
         // コード生成（重複チェック付き）
         let code: string;
@@ -76,7 +87,7 @@ export async function POST(req: NextRequest) {
                 code,
                 expires_at: expiresAt,
                 is_single_use: isSingleUse,
-                created_by: createdBy || null,
+                created_by: user.id,
                 max_uses: isSingleUse ? 1 : 100,
             }),
         });
@@ -96,15 +107,24 @@ export async function POST(req: NextRequest) {
     }
 }
 
+
+
 // GET: 発行済み招待コード一覧を取得
 export async function GET(req: NextRequest) {
     try {
-        const { searchParams } = new URL(req.url);
-        const orgId = searchParams.get("orgId");
-
-        if (!orgId) {
-            return NextResponse.json({ error: "Organization ID is required" }, { status: 400 });
+        // 🔒 認証チェック
+        const { user, error: authError } = await getAuthUser();
+        if (authError || !user) {
+            return unauthorizedResponse();
         }
+
+        // 🔒 スタッフは招待コード一覧閲覧不可
+        if (user.role === "staff") {
+            return forbiddenResponse("Only owners/managers can view invitation codes");
+        }
+
+        // 🔒 自組織のコードのみ取得可能
+        const orgId = user.orgId;
 
         const codes = await supabaseFetch(
             `/invitation_codes?org_id=eq.${orgId}&order=created_at.desc&limit=20`
@@ -141,11 +161,35 @@ export async function GET(req: NextRequest) {
 // DELETE: 招待コードを削除
 export async function DELETE(req: NextRequest) {
     try {
+        // 🔒 認証チェック
+        const { user, error: authError } = await getAuthUser();
+        if (authError || !user) {
+            return unauthorizedResponse();
+        }
+
+        // 🔒 スタッフは招待コード削除不可
+        if (user.role === "staff") {
+            return forbiddenResponse("Only owners/managers can delete invitation codes");
+        }
+
         const { searchParams } = new URL(req.url);
         const codeId = searchParams.get("id");
 
         if (!codeId) {
             return NextResponse.json({ error: "Code ID is required" }, { status: 400 });
+        }
+
+        // 🔒 自組織のコードのみ削除可能（コードの存在確認と組織チェック）
+        const existing = await supabaseFetch(
+            `/invitation_codes?id=eq.${codeId}&select=id,org_id`
+        );
+
+        if (!existing || existing.length === 0) {
+            return NextResponse.json({ error: "Code not found" }, { status: 404 });
+        }
+
+        if (existing[0].org_id !== user.orgId) {
+            return forbiddenResponse("Cannot delete invitation codes from other organizations");
         }
 
         await supabaseFetch(`/invitation_codes?id=eq.${codeId}`, {
@@ -161,3 +205,4 @@ export async function DELETE(req: NextRequest) {
         );
     }
 }
+

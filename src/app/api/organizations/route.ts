@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { getAuthenticatedUser } from "@/lib/supabase/server";
+import crypto from "crypto";
 
+// 暗号学的に安全な招待コード生成
 function generateInviteCode(): string {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const bytes = crypto.randomBytes(8);
     let code = "";
     for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
+        code += chars[bytes[i] % chars.length];
     }
     return code;
 }
 
 export async function POST(request: NextRequest) {
     try {
-        const { name, slug, ownerName, userId, email } = await request.json();
+        // 🔒 セッションから認証済みユーザーIDを取得（なりすまし防止）
+        const authUser = await getAuthenticatedUser();
+        if (!authUser) {
+            return NextResponse.json(
+                { error: "認証が必要です。ログインしてください。" },
+                { status: 401 }
+            );
+        }
+
+        const { name, slug, ownerName } = await request.json();
 
         if (!name || !slug || !ownerName) {
             return NextResponse.json(
@@ -22,16 +34,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // If userId is provided directly from client, use it
-        // Otherwise, try to get from session (fallback)
-        let authenticatedUserId = userId;
-
-        if (!authenticatedUserId) {
-            return NextResponse.json(
-                { error: "ユーザーIDが必要です" },
-                { status: 400 }
-            );
-        }
+        // 🔒 セッションから取得したユーザーIDを使用
+        const authenticatedUserId = authUser.id;
 
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;

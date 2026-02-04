@@ -31,7 +31,13 @@ const PROTECTED_API_PATHS = [
     "/api/documents",
     "/api/conversations",
     "/api/users",
+    "/api/invitations",      // 追加: 招待コード管理
+    "/api/registrations",    // 追加: 従業員承認
+    "/api/organizations",    // 追加: 組織作成
+    "/api/employee",         // 追加: 従業員API
+    "/api/knowledge",        // 追加: RAG検索
 ];
+
 
 function isPublicPath(pathname: string): boolean {
     return PUBLIC_PATHS.some(
