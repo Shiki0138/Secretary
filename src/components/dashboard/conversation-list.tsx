@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { createBrowserClient } from "@supabase/ssr";
 
 interface Conversation {
     id: string;
@@ -53,7 +54,49 @@ export function ConversationList() {
 
     useEffect(() => {
         fetchConversations();
+
+        // Set up Supabase Realtime for new messages
+        const supabase = createBrowserClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+
+        const channel = supabase
+            .channel('dashboard:conversations')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'messages',
+                },
+                () => {
+                    // Reload conversations when any message changes
+                    fetchConversations();
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'conversations',
+                },
+                () => {
+                    fetchConversations();
+                }
+            )
+            .subscribe();
+
+        // Fallback polling every 15 seconds
+        const interval = setInterval(fetchConversations, 15000);
+
+        return () => {
+            supabase.removeChannel(channel);
+            clearInterval(interval);
+        };
     }, [fetchConversations]);
+
 
     const getStatusBadge = (status: Conversation["status"]) => {
         const styles = {

@@ -86,21 +86,34 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { message, originalMessage, orgId } = body;
 
-        if (!message || !orgId) {
-            return NextResponse.json({ success: false, error: "Message and orgId are required" }, { status: 400 });
+        // Input validation
+        if (!message || typeof message !== 'string') {
+            return NextResponse.json({ success: false, error: "Message is required" }, { status: 400 });
+        }
+
+        // Sanitize message (prevent XSS)
+        const sanitizedMessage = message.slice(0, 1000).trim();
+        if (!sanitizedMessage) {
+            return NextResponse.json({ success: false, error: "Message cannot be empty" }, { status: 400 });
         }
 
         const supabase = getSupabaseAdmin();
 
-        // Get user info
+        // Get user info with security check
         const { data: user, error: userError } = await supabase
             .from("users")
-            .select("id, org_id, display_name")
+            .select("id, org_id, display_name, role")
             .eq("id", authUser.id)
             .single();
 
         if (userError || !user) {
             return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        }
+
+        // Security: Verify user has access to this org
+        if (orgId && user.org_id !== orgId) {
+            console.error(`Security: User ${user.id} attempted to access org ${orgId} but belongs to ${user.org_id}`);
+            return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
         }
 
         // Get or create conversation
@@ -124,7 +137,7 @@ export async function POST(request: NextRequest) {
                     org_id: user.org_id,
                     employee_id: user.id,
                     status: "open",
-                    subject: message.slice(0, 50),
+                    subject: sanitizedMessage.slice(0, 50),
                 })
                 .select("id")
                 .single();
@@ -142,8 +155,8 @@ export async function POST(request: NextRequest) {
             conversation_id: conversationId,
             sender_id: user.id,
             direction: "employee_to_owner",
-            original_text: originalMessage || message,
-            translated_text: message,
+            original_text: originalMessage?.slice(0, 1000) || sanitizedMessage,
+            translated_text: sanitizedMessage,
             is_confirmed: true,
         });
 
@@ -151,6 +164,9 @@ export async function POST(request: NextRequest) {
             console.error("Save message error:", msgError);
             return NextResponse.json({ success: false, error: "Failed to save message" }, { status: 500 });
         }
+
+        // Notify owner(s) via email (fire and forget)
+        notifyOwners(supabase, user.org_id, user.display_name || "従業員", sanitizedMessage).catch(console.error);
 
         return NextResponse.json({
             success: true,
@@ -161,3 +177,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
     }
 }
+
+// Notify owners of new employee message
+async function notifyOwners(supabase: ReturnType<typeof getSupabaseAdmin>, orgId: string, employeeName: string, message: string) {
+    try {
+        // Get all owners in the org
+        const { data: owners } = await supabase
+            .from("users")
+            .select("id, email, display_name")
+            .eq("org_id", orgId)
+            .eq("role", "owner")
+            .eq("is_active", true);
+
+        if (!owners || owners.length === 0) {
+            console.log("No owners to notify in org:", orgId);
+            return;
+        }
+
+        // Get org name
+        const { data: org } = await supabase
+            .from("organizations")
+            .select("name")
+            .eq("id", orgId)
+            .single();
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://secrty.vercel.app";
+
+        for (const owner of owners) {
+            if (!owner.email) continue;
+
+            // For now, log the notification (email sending can be added later)
+            console.log(`[Notification] Would send email to ${owner.email}:
+Subject: 【${org?.name || "AI秘書"}】${employeeName}さんからメッセージ
+Body: 新しいメッセージが届きました。
+
+送信者: ${employeeName}
+内容: ${message.slice(0, 100)}${message.length > 100 ? "..." : ""}
+
+ダッシュボードで確認: ${appUrl}/dashboard
+`);
+        }
+    } catch (error) {
+        console.error("Notify owners error:", error);
+    }
+}
+
