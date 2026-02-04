@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { KnowledgeQA } from "@/components/knowledge/knowledge-qa";
+import { ChatInterface } from "@/components/employee/chat-interface";
 
 /**
  * 従業員ポータル
@@ -127,6 +128,16 @@ export default async function EmployeePortalPage() {
                 <nav aria-label="クイックアクション">
                     <div className="grid grid-cols-2 gap-3">
                         <a
+                            href="#chat"
+                            className="p-4 bg-blue-50 rounded-xl border border-blue-200 hover:bg-blue-100 transition-colors text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            aria-label="経営者へ連絡"
+                        >
+                            <span className="text-2xl mb-1 block" aria-hidden="true">
+                                💬
+                            </span>
+                            <span className="text-sm font-medium text-blue-700">経営者へ連絡</span>
+                        </a>
+                        <a
                             href="#question"
                             className="p-4 bg-white rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
                             aria-label="質問する"
@@ -134,7 +145,7 @@ export default async function EmployeePortalPage() {
                             <span className="text-2xl mb-1 block" aria-hidden="true">
                                 ?
                             </span>
-                            <span className="text-sm font-medium text-gray-900">質問する</span>
+                            <span className="text-sm font-medium text-gray-900">規則Q&A</span>
                         </a>
                         <a
                             href="#announcements"
@@ -142,19 +153,9 @@ export default async function EmployeePortalPage() {
                             aria-label="お知らせを見る"
                         >
                             <span className="text-2xl mb-1 block" aria-hidden="true">
-                                !
+                                📢
                             </span>
                             <span className="text-sm font-medium text-gray-900">お知らせ</span>
-                        </a>
-                        <a
-                            href="#shifts"
-                            className="p-4 bg-white rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            aria-label="シフトを確認"
-                        >
-                            <span className="text-2xl mb-1 block" aria-hidden="true">
-                                Cal
-                            </span>
-                            <span className="text-sm font-medium text-gray-900">シフト</span>
                         </a>
                         <a
                             href="#documents"
@@ -162,12 +163,29 @@ export default async function EmployeePortalPage() {
                             aria-label="規則を確認"
                         >
                             <span className="text-2xl mb-1 block" aria-hidden="true">
-                                Doc
+                                📄
                             </span>
                             <span className="text-sm font-medium text-gray-900">規則確認</span>
                         </a>
                     </div>
                 </nav>
+
+                {/* Chat with Owner */}
+                <section
+                    id="chat"
+                    className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+                    aria-labelledby="chat-heading"
+                >
+                    <div className="p-4 border-b border-gray-200 bg-blue-50">
+                        <h2 id="chat-heading" className="font-semibold text-gray-900">
+                            💬 経営者へ連絡
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-1">
+                            休暇申請やシフト相談など、経営者に直接連絡できます
+                        </p>
+                    </div>
+                    <ChatInterface userId={authUser.id} orgId={org.id} />
+                </section>
 
                 {/* Knowledge Q&A */}
                 <section
@@ -177,22 +195,6 @@ export default async function EmployeePortalPage() {
                 >
                     <h2 id="question-heading" className="sr-only">規則について質問</h2>
                     <KnowledgeQA isDemo={false} />
-                </section>
-
-                {/* Shift Calendar Placeholder */}
-                <section
-                    id="shifts"
-                    className="bg-white rounded-xl border border-gray-200 p-4"
-                    aria-labelledby="shifts-heading"
-                >
-                    <h2 id="shifts-heading" className="font-semibold text-gray-900 mb-3">
-                        今月のシフト
-                    </h2>
-                    <Suspense fallback={<LoadingFallback />}>
-                        <div className="text-gray-500 text-sm">
-                            シフトカレンダーはLINEのリッチメニューから確認できます
-                        </div>
-                    </Suspense>
                 </section>
 
                 {/* Documents Placeholder */}
