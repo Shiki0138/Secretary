@@ -40,7 +40,7 @@ export default function Home() {
             従業員と経営者の<br className="sm:hidden" />コミュニケーションを変える
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
-            AIがLINEメッセージのトーンを分析・翻訳。感情的な表現を建設的な対話へ変換し、
+            AIがメッセージのトーンを分析・翻訳。感情的な表現を建設的な対話へ変換し、
             職場の心理的安全性を高めます。
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -74,21 +74,22 @@ export default function Home() {
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
               <span className="text-2xl">💬</span>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">LINE連携</h3>
+            <h3 className="font-semibold text-gray-900 mb-2">シンプルなWebチャット</h3>
             <p className="text-sm text-gray-600">
-              従業員はLINEから直接相談可能。使い慣れたアプリで気軽にコミュニケーションできます
+              ブラウザから直接相談可能。アプリ不要で簡単にコミュニケーションできます
             </p>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
               <span className="text-2xl">📋</span>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">全社通知・規則管理</h3>
+            <h3 className="font-semibold text-gray-900 mb-2">AI質問対応</h3>
             <p className="text-sm text-gray-600">
               就業規則や給与規定をアップロード。AIが従業員の質問に自動回答します
             </p>
           </div>
         </div>
+
 
         {/* How it works */}
         <div className="bg-white rounded-2xl border border-gray-100 p-8">
@@ -104,7 +105,7 @@ export default function Home() {
             <div className="text-center">
               <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3 font-bold">2</div>
               <h4 className="font-medium text-gray-900 mb-1">従業員を招待</h4>
-              <p className="text-sm text-gray-500">招待コードをLINEで共有</p>
+              <p className="text-sm text-gray-500">招待リンクを共有するだけ</p>
             </div>
             <div className="text-center">
               <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3 font-bold">3</div>

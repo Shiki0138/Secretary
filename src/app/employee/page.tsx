@@ -7,7 +7,7 @@ import { ChatInterface } from "@/components/employee/chat-interface";
 
 /**
  * 従業員ポータル
- * LINEのリッチメニューからアクセスするWebページ
+ * ブラウザからアクセスするシンプルなWebページ
  */
 
 async function getEmployeeInfo(userId: string) {

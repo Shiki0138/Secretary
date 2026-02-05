@@ -7,21 +7,21 @@ import {
 } from "@/services/conversation.service";
 import { getUserById } from "@/services/user.service";
 import { getAuthUser, verifyAccess, unauthorizedResponse, forbiddenResponse } from "@/lib/auth";
-import { sendLinePushMessage } from "@/lib/line-push";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * Conversations API
  *
- * Manages employee-owner conversations
+ * Manages employee-owner conversations (Web chat only)
  */
 
 const replySchema = z.object({
     conversationId: z.string().uuid(),
-    message: z.string().min(1),
+    message: z.string().min(1).max(1000),
     employeeId: z.string().uuid(),
 });
 
-// Send a reply to employee via LINE
+// Send a reply to employee (saved to database)
 export async function POST(request: NextRequest) {
     try {
         // Authenticate user
@@ -38,35 +38,36 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { conversationId, message, employeeId } = replySchema.parse(body);
 
-        // Get employee info
+        // Verify employee exists
         const employee = await getUserById(employeeId);
-        if (!employee || !employee.line_user_id) {
+        if (!employee) {
             return NextResponse.json(
-                { success: false, error: "従業員のLINE IDが見つかりません" },
+                { success: false, error: "従業員が見つかりません" },
                 { status: 400 }
             );
         }
 
-        // Send LINE message
-        const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-        if (!accessToken) {
+        // Save message to database
+        const supabase = getSupabaseAdmin();
+        const { error: msgError } = await supabase.from("messages").insert({
+            conversation_id: conversationId,
+            sender_id: user.id,
+            direction: "owner_to_employee",
+            original_text: message,
+            translated_text: message,
+            is_confirmed: true,
+        });
+
+        if (msgError) {
+            console.error("Save reply error:", msgError);
             return NextResponse.json(
-                { success: false, error: "LINE設定がありません" },
+                { success: false, error: "メッセージの保存に失敗しました" },
                 { status: 500 }
             );
         }
 
-        await sendLinePushMessage({
-            accessToken,
-            userId: employee.line_user_id,
-            messages: [{
-                type: "text",
-                text: `📩 経営者からの返信:\n\n${message}`
-            }]
-        });
-
-        // Save message to database (optional - for logging)
-        // You could add this if needed
+        // Update conversation status to pending (owner replied)
+        await updateConversationStatus(conversationId, "pending");
 
         return NextResponse.json({
             success: true,
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
 
 
 // Get conversations for an organization

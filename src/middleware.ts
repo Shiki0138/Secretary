@@ -15,7 +15,6 @@ const PUBLIC_PATHS = [
     "/signup",
     "/onboarding",
     "/auth/callback",
-    "/api/line/webhook", // LINE webhook uses signature verification
     "/api/health",
 ];
 
