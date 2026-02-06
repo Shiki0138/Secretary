@@ -67,10 +67,10 @@ export default function SignupPage() {
     // Show email sent confirmation
     if (emailSent) {
         return (
-            <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-                <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="min-h-dvh flex items-center justify-center bg-neutral-50 p-4">
+                <div className="max-w-sm w-full bg-white border border-neutral-200 rounded-lg p-8 text-center">
+                    <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-6 h-6 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                     </div>
@@ -95,13 +95,13 @@ export default function SignupPage() {
                         </ul>
                     </div>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
-                        <p className="text-sm text-blue-800">
+                    <div className="bg-neutral-50 border border-neutral-200 rounded p-4 text-left">
+                        <p className="text-sm text-neutral-700">
                             <strong>既にアカウントをお持ちですか？</strong>
                         </p>
                         <a
                             href="/login"
-                            className="mt-2 inline-block text-sm text-blue-600 font-medium hover:underline"
+                            className="mt-2 inline-block text-sm text-neutral-900 font-medium hover:underline"
                         >
                             → ログインページへ
                         </a>
@@ -123,14 +123,14 @@ export default function SignupPage() {
     }
 
     return (
-        <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-            <div className="max-w-md w-full">
-                <div className="bg-white rounded-2xl shadow-xl p-8">
-                    <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
-                        AI翻訳秘書を始める
+        <div className="min-h-dvh flex items-center justify-center bg-neutral-50 p-4">
+            <div className="max-w-sm w-full">
+                <div className="bg-white border border-neutral-200 rounded-lg p-8">
+                    <h1 className="text-xl font-semibold text-neutral-900 text-center mb-1">
+                        アカウント作成
                     </h1>
-                    <p className="text-center text-gray-600 mb-6">
-                        経営者アカウントを作成
+                    <p className="text-center text-neutral-500 text-sm mb-6">
+                        経営者アカウント
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -157,7 +157,7 @@ export default function SignupPage() {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
                                 placeholder="you@example.com"
                             />
                         </div>
@@ -172,7 +172,7 @@ export default function SignupPage() {
                                 minLength={8}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-3 py-2 border border-neutral-300 rounded focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
                                 placeholder="8文字以上"
                             />
                         </div>
@@ -180,7 +180,7 @@ export default function SignupPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+                            className="w-full py-2.5 bg-neutral-900 text-white rounded font-medium hover:bg-neutral-800 disabled:opacity-50"
                         >
                             {loading ? "処理中..." : "確認メールを送信"}
                         </button>
@@ -188,7 +188,7 @@ export default function SignupPage() {
 
                     <p className="mt-6 text-center text-sm text-gray-500">
                         すでにアカウントをお持ちですか？{" "}
-                        <a href="/login" className="text-blue-600 hover:underline font-medium">
+                        <a href="/login" className="text-neutral-900 hover:underline font-medium">
                             ログイン
                         </a>
                     </p>

@@ -80,13 +80,13 @@ function LoginForm() {
 
 
   return (
-    <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+    <div className="max-w-sm w-full space-y-6 p-8 bg-white border border-neutral-200 rounded-lg">
       <div>
-        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
-          AI翻訳秘書
+        <h2 className="text-center text-xl font-semibold text-neutral-900">
+          ログイン
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          経営者ダッシュボードにログイン
+        <p className="mt-1 text-center text-sm text-neutral-500">
+          経営者ダッシュボード
         </p>
       </div>
 
@@ -98,7 +98,7 @@ function LoginForm() {
         )}
 
         {status && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-600 p-4 rounded-lg text-sm">
+          <div className="bg-neutral-50 border border-neutral-200 text-neutral-600 p-3 rounded text-sm">
             {status}
           </div>
         )}
@@ -115,7 +115,7 @@ function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
               placeholder="your@email.com"
             />
           </div>
@@ -131,7 +131,7 @@ function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
               placeholder="••••••••"
             />
           </div>
@@ -140,7 +140,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-900 disabled:opacity-50"
         >
           {loading ? "ログイン中..." : "ログイン"}
         </button>
@@ -149,7 +149,7 @@ function LoginForm() {
 
       <p className="mt-4 text-center text-sm text-gray-500">
         アカウントをお持ちでない場合は{" "}
-        <a href="/signup" className="text-blue-600 hover:underline font-medium">
+        <a href="/signup" className="text-neutral-900 hover:underline font-medium">
           新規登録
         </a>
       </p>
@@ -159,7 +159,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-gray-50">
+    <div className="min-h-dvh flex items-center justify-center bg-neutral-50">
       <Suspense fallback={
         <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto"></div>
